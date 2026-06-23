@@ -1,15 +1,29 @@
-import { networkService } from "@/shared/lib/network-service"
-
 let monitorStarted = false
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs" && !monitorStarted) {
     monitorStarted = true
-    startNetworkMonitor()
+
+    // Dynamic import — network-service uses Node.js modules
+    // (child_process, path, prisma) which are NOT Edge Runtime compatible.
+    const { networkService } = await import("@/shared/lib/network-service")
+    startNetworkMonitor(networkService)
   }
 }
 
-function startNetworkMonitor() {
+function startNetworkMonitor(networkService: {
+  isOnline(): Promise<boolean>
+  getStatus(): Promise<{
+    status: string
+    hotspotActive: boolean
+    lastCheck: string
+    currentSSID: string | null
+    ipAddress: string | null
+  }>
+  startHotspot(): Promise<void>
+  stopHotspot(): Promise<void>
+  updateDB(fields: Record<string, unknown>): Promise<void>
+}) {
   let consecutiveFailures = 0
   let consecutiveSuccesses = 0
 
