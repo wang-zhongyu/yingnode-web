@@ -1,12 +1,12 @@
 "use client"
 
+import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useAction } from "next-safe-action/hooks"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { signIn } from "@/shared/lib/auth-client"
 import { signInSchema, type SignInInput } from "@/features/auth/schemas/auth.schema"
-import { signInAction } from "@/actions/auth.actions"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Field, FieldLabel, FieldError } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -14,16 +14,8 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 
 export function LoginForm() {
+  const [isPending, setIsPending] = useState(false)
   const router = useRouter()
-  const { execute, isPending } = useAction(signInAction, {
-    onSuccess() {
-      toast.success("登录成功")
-      router.push("/network")
-    },
-    onError({ error }) {
-      toast.error(error.serverError ?? "登录失败，请检查邮箱和密码")
-    },
-  })
 
   const {
     register,
@@ -32,6 +24,28 @@ export function LoginForm() {
   } = useForm<SignInInput>({
     resolver: zodResolver(signInSchema),
   })
+
+  async function onSubmit({ email, password }: SignInInput) {
+    setIsPending(true)
+    try {
+      const result = await signIn.email({
+        email,
+        password,
+      })
+
+      if (result.error) {
+        toast.error(result.error.message ?? "登录失败，请检查邮箱和密码")
+        return
+      }
+
+      toast.success("登录成功")
+      router.push("/network")
+    } catch {
+      toast.error("登录失败，请检查邮箱和密码")
+    } finally {
+      setIsPending(false)
+    }
+  }
 
   return (
     <Card>
@@ -42,7 +56,7 @@ export function LoginForm() {
       <CardContent>
         <form
           id="login-form"
-          onSubmit={handleSubmit(execute)}
+          onSubmit={handleSubmit(onSubmit)}
           className="flex flex-col gap-4"
         >
           <Field>
