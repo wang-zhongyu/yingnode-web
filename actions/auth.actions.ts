@@ -1,25 +1,10 @@
 "use server"
 
 import { actionClient } from "@/shared/lib/safe-action"
-import { signInSchema, setupSchema } from "@/features/auth/schemas/auth.schema"
+import { setupSchema } from "@/features/auth/schemas/auth.schema"
 import { checkUsersExist } from "@/features/auth/lib/check-users-exist"
 import { auth } from "@/shared/lib/auth"
 import { headers } from "next/headers"
-
-export const signInAction = actionClient
-  .schema(signInSchema)
-  .action(async ({ parsedInput: { email, password } }) => {
-    const result = await auth.api.signInEmail({
-      body: { email, password },
-      headers: await headers(),
-    })
-
-    if (!result) {
-      throw new Error("登录失败，请检查邮箱和密码")
-    }
-
-    return result
-  })
 
 export const setupAdminAction = actionClient
   .schema(setupSchema)
@@ -46,11 +31,4 @@ export const setupAdminAction = actionClient
     }
 
     return result
-  })
-
-export const signOutAction = actionClient
-  .action(async () => {
-    await auth.api.signOut({
-      headers: await headers(),
-    })
   })
