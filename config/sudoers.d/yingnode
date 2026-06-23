@@ -1,0 +1,4 @@
+yingnode ALL=(root) NOPASSWD: /usr/sbin/hostapd, /usr/sbin/dnsmasq
+yingnode ALL=(root) NOPASSWD: /sbin/iwlist, /sbin/iwconfig, /sbin/ip
+yingnode ALL=(root) NOPASSWD: /bin/kill, /usr/bin/killall
+yingnode ALL=(root) NOPASSWD: /sbin/wpa_cli
