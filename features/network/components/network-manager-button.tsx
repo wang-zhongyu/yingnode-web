@@ -56,11 +56,13 @@ export function NetworkManagerButton() {
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2">
-          {buttonContent()}
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={(props) => (
+          <Button variant="ghost" size="sm" className="gap-2" {...props}>
+            {buttonContent()}
+          </Button>
+        )}
+      />
       <NetworkPopover />
     </Popover>
   )

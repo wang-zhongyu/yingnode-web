@@ -1,24 +1,16 @@
-import { SidebarProvider, Sidebar, SidebarBody, SidebarItem, SidebarLabel } from "@/components/ui/sidebar"
-import { Wifi } from "lucide-react"
-
-const navItems = [
-  { label: "网络管理", href: "/network", icon: Wifi },
-]
+import { SidebarProvider } from "@/components/ui/sidebar"
+import { AppSidebar } from "@/features/navigation/components/app-sidebar"
+import { AppHeader } from "@/features/navigation/components/app-header"
+import { NetworkManagerButton } from "@/features/network/components/network-manager-button"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider defaultOpen>
-      <Sidebar>
-        <SidebarBody>
-          {navItems.map((item) => (
-            <SidebarItem key={item.href} href={item.href}>
-              <item.icon />
-              <SidebarLabel>{item.label}</SidebarLabel>
-            </SidebarItem>
-          ))}
-        </SidebarBody>
-      </Sidebar>
-      <main className="flex-1 p-6">{children}</main>
+      <AppSidebar />
+      <div className="flex flex-1 flex-col">
+        <AppHeader actions={<NetworkManagerButton />} />
+        <main className="flex-1 p-6 animate-slide-down">{children}</main>
+      </div>
     </SidebarProvider>
   )
 }
