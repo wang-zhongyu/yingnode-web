@@ -3,7 +3,12 @@ import { promisify } from "util"
 import { prisma } from "@/shared/lib/prisma"
 import type { NetworkStatus, WiFiNetwork, ConnectResult } from "@/shared/types/network"
 
-const execAsync = promisify(exec)
+const execAsyncBase = promisify(exec)
+
+/** exec with default timeout to prevent hanging on missing commands */
+function execAsync(command: string, timeoutMs = 8000) {
+  return execAsyncBase(command, { timeout: timeoutMs })
+}
 
 const WIFI_INTERFACE = process.env.WIFI_INTERFACE ?? "wlan0"
 const HOTSPOT_SSID = process.env.HOTSPOT_SSID ?? "yingnode"
@@ -91,7 +96,7 @@ class NetworkService {
 
   async scanWiFi(): Promise<WiFiNetwork[]> {
     try {
-      const { stdout } = await execAsync(`sudo iwlist ${WIFI_INTERFACE} scan`)
+      const { stdout } = await execAsync(`sudo iwlist ${WIFI_INTERFACE} scan`, 10000)
       return this.parseIwlist(stdout)
     } catch {
       return []
