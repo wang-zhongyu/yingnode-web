@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { signInSchema, type SignInInput } from "@/features/auth/schemas/auth.schema"
 import { signInAction } from "@/actions/auth.actions"
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Field, FieldLabel, FieldError } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -34,13 +34,17 @@ export function LoginForm() {
   })
 
   return (
-    <Card className="w-full max-w-sm">
+    <Card>
       <CardHeader>
         <CardTitle>登录</CardTitle>
         <CardDescription>使用管理员账户登录 YingNode</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit(execute)} className="flex flex-col gap-4">
+        <form
+          id="login-form"
+          onSubmit={handleSubmit(execute)}
+          className="flex flex-col gap-4"
+        >
           <Field>
             <FieldLabel>邮箱</FieldLabel>
             <Input
@@ -61,12 +65,14 @@ export function LoginForm() {
             />
             <FieldError errors={errors.password ? [errors.password] : undefined} />
           </Field>
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending ? <Spinner className="mr-2" /> : null}
-            登录
-          </Button>
         </form>
       </CardContent>
+      <CardFooter>
+        <Button type="submit" form="login-form" className="w-full" disabled={isPending}>
+          {isPending ? <Spinner data-icon="inline-start" /> : null}
+          登录
+        </Button>
+      </CardFooter>
     </Card>
   )
 }
