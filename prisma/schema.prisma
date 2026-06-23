@@ -1,0 +1,17 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model NetworkStatus {
+  id            Int      @id @default(autoincrement())
+  status        String   @default("ONLINE")
+  hotspotActive Boolean  @default(false)
+  lastCheck     DateTime @default(now())
+  currentSSID   String?
+  ipAddress     String?
+}
