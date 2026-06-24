@@ -45,3 +45,10 @@ export interface WiFiRecordItem {
   addedAt: string
   lastUsed: string | null
 }
+
+export interface DeviceConfig {
+  wifiInterface: string
+  hotspotIp: string
+  hotspotSsid: string
+  hotspotPassword: string
+}
