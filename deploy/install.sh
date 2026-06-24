@@ -81,8 +81,15 @@ deploy_app() {
     log "生成 Prisma Client..."
     npx prisma generate
 
+    log "运行数据库迁移..."
+    mkdir -p /data
+    npx prisma migrate deploy
+
     log "构建应用..."
     npm run build
+
+    # Next.js standalone 不自动加载 .env，复制到 standalone 目录
+    cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.next/standalone/.env"
 }
 
 # ---- 配置系统 ----
@@ -124,15 +131,15 @@ EOF
 
 # ---- 安装后配置 ----
 post_install() {
-    log "运行数据库迁移..."
+    log "验证部署..."
     cd "$INSTALL_DIR"
-    npx prisma migrate deploy
-
-    # Next.js standalone 不自动加载 .env，复制到 standalone 目录
-    cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.next/standalone/.env"
-
-    # 确保数据库目录存在
-    mkdir -p /data
+    if [ ! -f ".next/standalone/server.js" ]; then
+        err "构建产物缺失: .next/standalone/server.js"
+    fi
+    if [ ! -f ".next/standalone/.env" ]; then
+        warn ".env 未复制到 standalone 目录"
+    fi
+    log "部署验证通过"
 }
 
 # ---- 安装 systemd 服务 ----
@@ -183,9 +190,9 @@ main() {
     install_node
     install_network_deps
     create_user
+    configure_env
     deploy_app
     configure_system
-    configure_env
     post_install
     install_service
     show_info

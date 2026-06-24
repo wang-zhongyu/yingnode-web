@@ -2,6 +2,8 @@ import { InterfaceStatusCard } from "@/features/network/components/interface-sta
 import { WiFiRecordsCard } from "@/features/network/components/wifi-records-card"
 import { networkService } from "@/shared/lib/network-service"
 
+export const dynamic = "force-dynamic"
+
 export default async function NetworkSettingsPage() {
   const records = await networkService.getSavedWiFi()
 
