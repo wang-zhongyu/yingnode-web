@@ -3,10 +3,10 @@
 import { Cpu } from "lucide-react"
 import { MetricCard } from "./metric-card"
 import { MetricChart } from "./metric-chart"
-import { useSystemMetrics } from "../hooks/use-system-metrics"
 import { useMetricsHistory } from "../hooks/use-metrics-history"
 import { useProcesses } from "../hooks/use-processes"
 import { formatPercentage } from "../lib/format"
+import type { SystemMetrics } from "@/shared/types/monitoring"
 import {
   Table,
   TableHeader,
@@ -58,8 +58,7 @@ function TopCpuProcesses() {
   )
 }
 
-export function CpuTab() {
-  const { metrics, isLoading } = useSystemMetrics()
+export function CpuTab({ metrics }: { metrics: SystemMetrics | null }) {
   const { records, isLoading: historyLoading } = useMetricsHistory(60)
 
   const cpu = metrics?.cpu
@@ -68,7 +67,7 @@ export function CpuTab() {
     value: r.cpuUsage,
   }))
 
-  if (isLoading) return null
+  if (!metrics) return null
 
   return (
     <div className="flex flex-col gap-6">

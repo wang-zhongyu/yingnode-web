@@ -11,10 +11,11 @@ import { useSystemMetrics } from "../hooks/use-system-metrics"
 import { formatUptime } from "../lib/format"
 
 export function MonitoringView() {
-  const { metrics } = useSystemMetrics()
-  const uptimeText = metrics
-    ? formatUptime(metrics.uptime.days, metrics.uptime.hours, metrics.uptime.minutes)
-    : null
+  const { metrics, error } = useSystemMetrics()
+  const uptimeText =
+    metrics && !error
+      ? formatUptime(metrics.uptime.days, metrics.uptime.hours, metrics.uptime.minutes)
+      : null
 
   return (
     <Tabs defaultValue="overview">
@@ -37,16 +38,16 @@ export function MonitoringView() {
         )}
       </div>
       <TabsContent value="overview">
-        <OverviewTab />
+        <OverviewTab metrics={metrics} error={error} />
       </TabsContent>
       <TabsContent value="cpu">
-        <CpuTab />
+        <CpuTab metrics={metrics} />
       </TabsContent>
       <TabsContent value="memory">
-        <MemoryTab />
+        <MemoryTab metrics={metrics} />
       </TabsContent>
       <TabsContent value="disk">
-        <DiskTab />
+        <DiskTab metrics={metrics} />
       </TabsContent>
       <TabsContent value="processes">
         <ProcessesTab />

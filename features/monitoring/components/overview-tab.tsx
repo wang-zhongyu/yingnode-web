@@ -3,13 +3,16 @@
 import { Cpu, Puzzle, HardDrive, Thermometer } from "lucide-react"
 import { MetricCard } from "./metric-card"
 import { MetricCardSkeleton } from "./metric-card-skeleton"
-import { useSystemMetrics } from "../hooks/use-system-metrics"
 import { formatBytes, formatPercentage } from "../lib/format"
+import type { SystemMetrics } from "@/shared/types/monitoring"
 
-export function OverviewTab() {
-  const { metrics, error, isLoading } = useSystemMetrics()
+interface OverviewTabProps {
+  metrics: SystemMetrics | null
+  error: boolean
+}
 
-  if (isLoading) {
+export function OverviewTab({ metrics, error }: OverviewTabProps) {
+  if (!metrics && !error) {
     return (
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -19,15 +22,13 @@ export function OverviewTab() {
     )
   }
 
-  if (error) {
+  if (error || !metrics) {
     return (
       <div className="flex items-center justify-center py-24">
         <p className="text-sm text-muted-foreground">无法获取系统指标</p>
       </div>
     )
   }
-
-  if (!metrics) return null
 
   const { cpu, memory, disk, temp } = metrics
 

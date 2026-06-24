@@ -3,10 +3,10 @@
 import { Puzzle } from "lucide-react"
 import { MetricCard } from "./metric-card"
 import { MetricChart } from "./metric-chart"
-import { useSystemMetrics } from "../hooks/use-system-metrics"
 import { useMetricsHistory } from "../hooks/use-metrics-history"
 import { useProcesses } from "../hooks/use-processes"
 import { formatBytes, formatPercentage } from "../lib/format"
+import type { SystemMetrics } from "@/shared/types/monitoring"
 import {
   Table,
   TableHeader,
@@ -56,9 +56,10 @@ function TopMemoryProcesses() {
   )
 }
 
-export function MemoryTab() {
-  const { metrics } = useSystemMetrics()
+export function MemoryTab({ metrics }: { metrics: SystemMetrics | null }) {
   const { records, isLoading: historyLoading } = useMetricsHistory(60)
+
+  if (!metrics) return null
 
   const memory = metrics?.memory
   const chartData = records.map((r) => {

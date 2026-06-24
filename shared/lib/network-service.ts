@@ -1,15 +1,7 @@
-import { exec } from "child_process"
-import { promisify } from "util"
 import { prisma } from "@/shared/lib/prisma"
 import { getDeviceConfig } from "@/features/settings/lib/device-config"
+import { execAsync, escapeShellArg } from "@/shared/lib/shell"
 import type { NetworkStatus, WiFiNetwork, ConnectResult } from "@/shared/types/network"
-
-const execAsyncBase = promisify(exec)
-
-/** exec with default timeout to prevent hanging on missing commands */
-function execAsync(command: string, timeoutMs = 8000) {
-  return execAsyncBase(command, { timeout: timeoutMs })
-}
 
 const PING_TARGET = "8.8.8.8"
 const DNS_TEST_DOMAIN = "google.com"
@@ -17,12 +9,6 @@ const DNS_TEST_DOMAIN = "google.com"
 class NetworkService {
   private staticIpEnsured = false
   private configCache: { wifiInterface: string; hotspotIp: string; hotspotSsid: string } | null = null
-
-  /** Escape a value for safe interpolation inside single-quoted shell strings.
-   *  Replaces each ' with '\'' (end quote, escaped quote, resume quote). */
-  private escapeShellArg(arg: string): string {
-    return arg.replace(/'/g, "'\\''")
-  }
 
   /** Read device config from DB, with env-var fallback. Cached after first read. */
   async getConfig() {
@@ -145,7 +131,7 @@ class NetworkService {
 
   async scanWiFi(): Promise<WiFiNetwork[]> {
     const { wifiInterface } = await this.getConfig()
-    const escapedIface = this.escapeShellArg(wifiInterface)
+    const escapedIface = escapeShellArg(wifiInterface)
     try {
       const { stdout } = await execAsync(`sudo iwlist ${escapedIface} scan`, 10000)
       return this.parseIwlist(stdout)
@@ -252,7 +238,7 @@ class NetworkService {
     iface: string,
   ): Promise<number | null> {
     try {
-      const escapedIface = this.escapeShellArg(iface)
+      const escapedIface = escapeShellArg(iface)
       const { stdout } = await execAsync(
         `wpa_cli -i ${escapedIface} list_networks`,
       )
@@ -280,7 +266,7 @@ class NetworkService {
     }
 
     const { wifiInterface } = await this.getConfig()
-    const escapedIface = this.escapeShellArg(wifiInterface)
+    const escapedIface = escapeShellArg(wifiInterface)
 
     try {
       const networkId = await this.getWpaNetworkId(record.ssid, wifiInterface)
@@ -327,11 +313,11 @@ class NetworkService {
 
   async connectWiFi(ssid: string, password?: string, security?: string): Promise<ConnectResult> {
     const { wifiInterface } = await this.getConfig()
-    const escapedSSID = this.escapeShellArg(ssid)
+    const escapedSSID = escapeShellArg(ssid)
 
     try {
       // Capture the network ID returned by add_network
-      const escapedIface = this.escapeShellArg(wifiInterface)
+      const escapedIface = escapeShellArg(wifiInterface)
       const { stdout: addOut } = await execAsync(
         `wpa_cli -i ${escapedIface} add_network`,
       )
@@ -341,7 +327,7 @@ class NetworkService {
       }
 
       if (password) {
-        const escapedPwd = this.escapeShellArg(password)
+        const escapedPwd = escapeShellArg(password)
         await execAsync(
           `wpa_cli -i ${escapedIface} set_network ${networkId} ssid '"${escapedSSID}"'`,
         )
@@ -397,7 +383,7 @@ class NetworkService {
         return { success: false, ssid: null, ipAddress: null, error: "连接超时，请确认密码正确" }
       }
       console.error("[network] connectWiFi failed:", msg)
-      return { success: false, ssid: null, ipAddress: null, error: `连接失败: ${msg}` }
+      return { success: false, ssid: null, ipAddress: null, error: "连接失败，请重试" }
     }
   }
 }

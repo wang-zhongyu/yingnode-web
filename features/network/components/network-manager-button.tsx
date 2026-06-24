@@ -2,52 +2,46 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Popover, PopoverTrigger } from "@/components/ui/popover"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Wifi, WifiOff, Radio, Loader2 } from "lucide-react"
 import { NetworkPopover } from "./network-popover"
+import { IpChangeAlertDialog } from "./ip-change-alert-dialog"
 import type { NetworkStatus } from "@/shared/types/network"
 
 export function NetworkManagerButton() {
   const [status, setStatus] = useState<NetworkStatus | null>(null)
   const [error, setError] = useState(false)
-  const [ipDialogOpen, setIpDialogOpen] = useState(false)
-  const [dialogIp, setDialogIp] = useState("")
+  const [dialogUrl, setDialogUrl] = useState<string | null>(null)
   const prevIpRef = useRef<string | null | undefined>(undefined)
 
   useEffect(() => {
+    let cancelled = false
     async function poll() {
       try {
         const res = await fetch("/api/network/status")
         if (!res.ok) throw new Error("Failed")
         const data = (await res.json()) as NetworkStatus
+        if (cancelled) return
         setStatus(data)
         setError(false)
 
         const currentIp = data.reachableIp ?? data.ipAddress
         if (prevIpRef.current !== undefined && currentIp && currentIp !== prevIpRef.current) {
-          setDialogIp(currentIp)
-          setIpDialogOpen(true)
+          const port = window.location.port
+          const url = port ? `http://${currentIp}:${port}` : `http://${currentIp}`
+          setDialogUrl(url)
         }
         prevIpRef.current = currentIp
       } catch {
-        setError(true)
+        if (!cancelled) setError(true)
       }
     }
     poll()
     const interval = setInterval(poll, 10_000)
-    return () => clearInterval(interval)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [])
-
-  const port = typeof window !== "undefined" ? window.location.port : "3000"
-  const accessUrl = port ? `http://${dialogIp}:${port}` : `http://${dialogIp}`
 
   function buttonContent() {
     if (error) {
@@ -97,24 +91,13 @@ export function NetworkManagerButton() {
         <NetworkPopover />
       </Popover>
 
-      <AlertDialog open={ipDialogOpen} onOpenChange={setIpDialogOpen}>
-        <AlertDialogContent className="max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle>网络地址已变更</AlertDialogTitle>
-            <AlertDialogDescription>
-              设备 IP 已更新，请在浏览器中访问以下地址：
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2 text-center">
-            <span className="text-lg font-mono font-semibold tracking-wide select-all">
-              {accessUrl}
-            </span>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogAction variant="default">知道了</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <IpChangeAlertDialog
+        open={dialogUrl !== null}
+        onOpenChange={(open) => {
+          if (!open) setDialogUrl(null)
+        }}
+        accessUrl={dialogUrl ?? ""}
+      />
     </>
   )
 }

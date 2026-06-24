@@ -4,13 +4,14 @@ import { HardDrive } from "lucide-react"
 import { MetricCard } from "./metric-card"
 import { MetricChart } from "./metric-chart"
 import { DiskPartitionTable } from "./disk-partition-table"
-import { useSystemMetrics } from "../hooks/use-system-metrics"
 import { useMetricsHistory } from "../hooks/use-metrics-history"
 import { formatBytes, formatPercentage } from "../lib/format"
+import type { SystemMetrics } from "@/shared/types/monitoring"
 
-export function DiskTab() {
-  const { metrics } = useSystemMetrics()
+export function DiskTab({ metrics }: { metrics: SystemMetrics | null }) {
   const { records, isLoading: historyLoading } = useMetricsHistory(60)
+
+  if (!metrics) return null
 
   const disk = metrics?.disk
   const chartData = records.map((r) => {

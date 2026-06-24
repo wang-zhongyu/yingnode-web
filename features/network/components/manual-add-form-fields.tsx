@@ -1,6 +1,7 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useForm, Controller } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -9,7 +10,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Field, FieldLabel, FieldError } from "@/components/ui/field"
 import { Separator } from "@/components/ui/separator"
+import {
+  manualAddSchema,
+  type ManualAddInput,
+} from "../schemas/network.schema"
 
 interface ManualAddFormFieldsProps {
   initialSSID: string
@@ -22,67 +28,70 @@ export function ManualAddFormFields({
   connecting,
   onConnect,
 }: ManualAddFormFieldsProps) {
-  const ssidRef = useRef<HTMLInputElement>(null)
-  const passwordRef = useRef<HTMLInputElement>(null)
-  const [security, setSecurity] = useState("WPA2")
+  const {
+    register,
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ManualAddInput>({
+    resolver: zodResolver(manualAddSchema),
+    defaultValues: { ssid: initialSSID, password: "", security: "WPA2" },
+  })
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const ssid = ssidRef.current?.value.trim()
-    if (!ssid) return
-    onConnect(ssid, passwordRef.current?.value ?? "", security)
+  function onSubmit(values: ManualAddInput) {
+    onConnect(values.ssid.trim(), values.password ?? "", values.security)
   }
 
   return (
-    <form id="manual-add-form" onSubmit={handleSubmit}>
-      <div className="flex flex-col gap-4 py-2">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="manual-ssid" className="text-sm font-medium">
-            网络名称 (SSID)
-          </label>
-          <Input
-            id="manual-ssid"
-            name="ssid"
-            ref={ssidRef}
-            defaultValue={initialSSID}
-            placeholder="输入 Wi-Fi 名称"
-            disabled={connecting}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="manual-security" className="text-sm font-medium">
-            安全类型
-          </label>
-          <Select
-            value={security}
-            onValueChange={(v) => setSecurity(v ?? "WPA2")}
-            disabled={connecting}
-          >
-            <SelectTrigger id="manual-security">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="WPA2">WPA2</SelectItem>
-              <SelectItem value="WPA">WPA</SelectItem>
-              <SelectItem value="OPEN">开放网络</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Separator />
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="manual-password" className="text-sm font-medium">
-            密码
-          </label>
-          <Input
-            id="manual-password"
-            name="password"
-            type="password"
-            ref={passwordRef}
-            placeholder="输入密码（开放网络留空）"
-            disabled={connecting}
-          />
-        </div>
-      </div>
+    <form
+      id="manual-add-form"
+      onSubmit={handleSubmit(onSubmit)}
+      className="flex flex-col gap-4 py-2"
+    >
+      <Field>
+        <FieldLabel>网络名称 (SSID)</FieldLabel>
+        <Input
+          {...register("ssid")}
+          placeholder="输入 Wi-Fi 名称"
+          disabled={connecting}
+        />
+        <FieldError errors={errors.ssid ? [errors.ssid] : undefined} />
+      </Field>
+      <Field>
+        <FieldLabel>安全类型</FieldLabel>
+        <Controller
+          control={control}
+          name="security"
+          render={({ field }) => (
+            <Select
+              value={field.value}
+              onValueChange={field.onChange}
+              disabled={connecting}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="WPA2">WPA2</SelectItem>
+                <SelectItem value="WPA">WPA</SelectItem>
+                <SelectItem value="OPEN">开放网络</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
+        <FieldError errors={errors.security ? [errors.security] : undefined} />
+      </Field>
+      <Separator />
+      <Field>
+        <FieldLabel>密码</FieldLabel>
+        <Input
+          {...register("password")}
+          type="password"
+          placeholder="输入密码（开放网络留空）"
+          disabled={connecting}
+        />
+        <FieldError errors={errors.password ? [errors.password] : undefined} />
+      </Field>
     </form>
   )
 }
