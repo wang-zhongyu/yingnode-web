@@ -24,5 +24,9 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
   },
-  trustedOrigins: ["http://localhost:3000"],
+  // 客户端使用 window.location.origin 做同源请求，无需枚举所有 IP
+  trustedOrigins: [
+    "http://localhost:3000",
+    "http://172.16.42.1:3000",
+  ],
 })

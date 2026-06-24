@@ -110,23 +110,16 @@ configure_env() {
         return
     fi
 
-    # 自动检测局域网 IP
-    LOCAL_IP=$(ip -4 addr show scope global | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1 || echo "172.16.42.1")
-
     log "创建 .env 配置..."
-    # BETTER_AUTH_URL uses the fixed IP which is always bound to wlan0
-# (as secondary IP), so the device is reachable at this address
-# whether in hotspot mode or connected to external WiFi.
-cat > "$INSTALL_DIR/.env" <<EOF
+    cat > "$INSTALL_DIR/.env" <<EOF
 DATABASE_URL="file:/data/yingnode.db"
 WIFI_INTERFACE="wlan0"
 HOTSPOT_SSID="yingnode"
 HOTSPOT_IP="172.16.42.1"
 BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
-BETTER_AUTH_URL="http://172.16.42.1:3000"
 TERMINAL_TOKEN="$(openssl rand -base64 16)"
 EOF
-    log ".env 已创建，BETTER_AUTH_URL 使用固定 IP 172.16.42.1"
+    log ".env 已创建"
 }
 
 # ---- 安装后配置 ----
@@ -166,7 +159,6 @@ install_service() {
 
 # ---- 显示部署信息 ----
 show_info() {
-    LOCAL_IP=$(ip -4 addr show scope global | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1 || echo "172.16.42.1")
     echo ""
     log "============================================"
     log "  YingNode 部署完成!"
