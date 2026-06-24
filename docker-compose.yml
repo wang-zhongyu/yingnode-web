@@ -1,0 +1,20 @@
+services:
+  yingnode:
+    build: .
+    container_name: yingnode
+    network_mode: host
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      - yingnode-data:/data
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/data/yingnode.db
+      - WIFI_INTERFACE=${WIFI_INTERFACE:-wlan0}
+      - HOTSPOT_SSID=${HOTSPOT_SSID:-yingnode}
+      - HOTSPOT_IP=${HOTSPOT_IP:-172.16.42.1}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - TERMINAL_TOKEN=${TERMINAL_TOKEN}
+
+volumes:
+  yingnode-data:

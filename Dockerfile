@@ -1,5 +1,4 @@
 # yingnode-web
-
 ARG NODE_VERSION=22
 
 FROM node:${NODE_VERSION}-slim AS base
@@ -10,21 +9,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iproute2 procps \
     && rm -rf /var/lib/apt/lists/*
 
-FROM base AS deps
-WORKDIR /app
-
-COPY package.json package-lock.json* ./
-COPY prisma ./prisma
-
-RUN npm ci --omit=dev && \
-    npx prisma generate --no-engine
-
 FROM base AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
-RUN npm ci && npx prisma generate --no-engine
+
+RUN npm ci \
+    && npx prisma generate \
+    && npx prisma db push --skip-generate
 
 COPY . .
 RUN npm run build
@@ -32,20 +25,27 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 
-COPY --from=deps /app/node_modules ./node_modules
+# Next.js standalone output (includes minimal node_modules)
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+
+# Prisma CLI for runtime db push
+COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/prisma ./prisma
 
-# Copy system configs
-COPY config/sudoers.d/yingnode /etc/sudoers.d/yingnode
+# System configs
 COPY config/hostapd.conf /etc/hostapd/hostapd.conf
 COPY config/dnsmasq.conf /etc/dnsmasq.conf
+
+# Entrypoint: sync DB schema then start server
+COPY deploy/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 ENV NODE_ENV=production
 ENV PORT=3000
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
