@@ -1,18 +1,18 @@
 "use client"
 
-import { Cpu, Puzzle, HardDrive, Thermometer, Clock } from "lucide-react"
+import { Cpu, Puzzle, HardDrive, Thermometer } from "lucide-react"
 import { MetricCard } from "./metric-card"
 import { MetricCardSkeleton } from "./metric-card-skeleton"
 import { useSystemMetrics } from "../hooks/use-system-metrics"
-import { formatBytes, formatPercentage, formatUptime } from "../lib/format"
+import { formatBytes, formatPercentage } from "../lib/format"
 
 export function OverviewTab() {
   const { metrics, error, isLoading } = useSystemMetrics()
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
           <MetricCardSkeleton key={i} />
         ))}
       </div>
@@ -29,10 +29,10 @@ export function OverviewTab() {
 
   if (!metrics) return null
 
-  const { cpu, memory, disk, temp, uptime } = metrics
+  const { cpu, memory, disk, temp } = metrics
 
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
       <MetricCard
         icon={Cpu}
         label="CPU 使用率"
@@ -59,11 +59,6 @@ export function OverviewTab() {
         primaryValue={`${temp.celsius}°C`}
         usage={Math.min(temp.celsius, 100)}
         colorThreshold="temp"
-      />
-      <MetricCard
-        icon={Clock}
-        label="运行时间"
-        primaryValue={formatUptime(uptime.days, uptime.hours, uptime.minutes)}
       />
     </div>
   )
