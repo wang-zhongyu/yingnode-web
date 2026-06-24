@@ -4,6 +4,7 @@ const FALLBACK = {
   wifiInterface: process.env.WIFI_INTERFACE ?? "wlan0",
   hotspotIp: process.env.HOTSPOT_IP ?? "172.16.42.1",
   hotspotSsid: process.env.HOTSPOT_SSID ?? "yingnode",
+  hotspotPassword: process.env.HOTSPOT_PASSWORD ?? "",
 }
 
 export async function getDeviceConfig() {
@@ -13,6 +14,7 @@ export async function getDeviceConfig() {
       wifiInterface: config?.wifiInterface ?? FALLBACK.wifiInterface,
       hotspotIp: config?.hotspotIp ?? FALLBACK.hotspotIp,
       hotspotSsid: config?.hotspotSsid ?? FALLBACK.hotspotSsid,
+      hotspotPassword: config?.hotspotPassword ?? FALLBACK.hotspotPassword,
     }
   } catch {
     // prisma not initialized (edge runtime) or table missing — return env fallback
