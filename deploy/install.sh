@@ -267,6 +267,7 @@ start_services() {
 
 # ---- 显示部署信息 ----
 show_info() {
+    LOCAL_IP=$(ip -4 addr show scope global 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1 || echo "172.16.42.1")
     echo ""
     log "============================================"
     log "  YingNode 部署完成!"
