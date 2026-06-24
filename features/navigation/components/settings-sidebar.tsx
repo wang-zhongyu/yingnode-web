@@ -1,31 +1,49 @@
+"use client"
+
+import { useRouter } from "next/navigation"
+import { ArrowLeft, Settings } from "lucide-react"
 import {
   Sidebar,
   SidebarHeader,
   SidebarContent,
-  SidebarFooter,
-  SidebarSeparator,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
 } from "@/components/ui/sidebar"
 import { SettingsNavMain } from "./settings-nav-main"
-import { SidebarUser } from "./sidebar-user"
-import { Radio } from "lucide-react"
 
 export function SettingsSidebar() {
+  const router = useRouter()
+
   return (
     <Sidebar>
       <SidebarHeader className="px-4 py-3">
-        <div className="flex items-center gap-2 font-heading text-lg font-semibold">
-          <Radio className="size-5" />
-          <span>YingNode</span>
-        </div>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              render={(props) => (
+                <button {...props} onClick={() => router.push("/network")}>
+                  <ArrowLeft className="size-4" />
+                  <span>返回</span>
+                </button>
+              )}
+            />
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              render={(props) => (
+                <div {...props} className="pointer-events-none">
+                  <Settings className="size-4" />
+                  <span className="font-medium">设置</span>
+                </div>
+              )}
+            />
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
-      <SidebarSeparator />
       <SidebarContent>
         <SettingsNavMain />
       </SidebarContent>
-      <SidebarSeparator />
-      <SidebarFooter>
-        <SidebarUser />
-      </SidebarFooter>
     </Sidebar>
   )
 }
