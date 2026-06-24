@@ -123,7 +123,12 @@ deploy_app() {
     if [ -d "$INSTALL_DIR/.git" ]; then
         log "更新已有仓库..."
         cd "$INSTALL_DIR"
-        git pull origin main 2>/dev/null || warn "更新失败，继续使用当前版本"
+        # 先获取当前 remote，尝试 pull
+        git pull origin main 2>/dev/null || {
+            warn "GitHub 更新失败，尝试 Gitee 镜像..."
+            git remote add gitee "$REPO_MIRROR" 2>/dev/null || true
+            git pull gitee main 2>/dev/null || warn "更新失败，继续使用当前版本"
+        }
     else
         log "克隆仓库..."
         rm -rf "$INSTALL_DIR"
