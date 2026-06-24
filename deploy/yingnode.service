@@ -12,6 +12,7 @@ Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=3000
+EnvironmentFile=-/opt/yingnode/.env
 
 # Security (still needs root for network operations)
 NoNewPrivileges=no

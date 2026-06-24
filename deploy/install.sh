@@ -122,6 +122,19 @@ EOF
     log ".env 已创建，BETTER_AUTH_URL 使用固定 IP 172.16.42.1"
 }
 
+# ---- 安装后配置 ----
+post_install() {
+    log "运行数据库迁移..."
+    cd "$INSTALL_DIR"
+    npx prisma migrate deploy
+
+    # Next.js standalone 不自动加载 .env，复制到 standalone 目录
+    cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.next/standalone/.env"
+
+    # 确保数据库目录存在
+    mkdir -p /data
+}
+
 # ---- 安装 systemd 服务 ----
 install_service() {
     log "安装 systemd 服务..."
@@ -173,6 +186,7 @@ main() {
     deploy_app
     configure_system
     configure_env
+    post_install
     install_service
     show_info
 }
