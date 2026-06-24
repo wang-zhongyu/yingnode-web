@@ -24,6 +24,8 @@ export function ProcessesTab() {
 
   if (isLoading) return <Skeleton className="h-96 w-full" />
 
+  if (processes.length === 0) return null
+
   return (
     <Table>
       <TableHeader>

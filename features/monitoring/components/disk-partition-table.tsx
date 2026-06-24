@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useDiskPartitions } from "../hooks/use-disk-partitions"
 import {
   Table,
   TableHeader,
@@ -11,45 +11,20 @@ import {
 } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 
-interface Partition {
-  filesystem: string
-  size: string
-  used: string
-  available: string
-  usePercent: string
-  mountedOn: string
-}
-
 export function DiskPartitionTable() {
-  const [partitions, setPartitions] = useState<Partition[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-
-  const fetchPartitions = useCallback(async () => {
-    try {
-      const res = await fetch("/api/monitoring/disk")
-      if (!res.ok) throw new Error("Failed to fetch")
-      const data = await res.json()
-      setPartitions(data.partitions)
-    } catch {
-      setPartitions([])
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchPartitions()
-  }, [fetchPartitions])
+  const { partitions, isLoading, error } = useDiskPartitions()
 
   if (isLoading) return <Skeleton className="h-48 w-full" />
 
-  if (partitions.length === 0) {
+  if (error) {
     return (
       <p className="text-sm text-muted-foreground py-4">
         无法获取分区信息
       </p>
     )
   }
+
+  if (partitions.length === 0) return null
 
   return (
     <Table>

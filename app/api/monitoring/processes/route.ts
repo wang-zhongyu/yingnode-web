@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
           pid: parseInt(fields[1] ?? "0", 10),
           cpu: parseFloat(fields[2] ?? "0"),
           mem: parseFloat(fields[3] ?? "0"),
-          name: fields.slice(10).join(" ") || fields[0] ?? "unknown",
+          name: (fields.slice(10).join(" ") || fields[0]) ?? "unknown",
         }
       })
 
