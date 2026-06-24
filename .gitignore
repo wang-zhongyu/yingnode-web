@@ -44,3 +44,7 @@ next-env.d.ts
 
 # docs (design specs are internal)
 /docs
+
+# database files
+/dev.db
+/dev.db-journal
