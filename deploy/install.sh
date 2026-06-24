@@ -157,7 +157,7 @@ deploy_app() {
 build_app() {
     cd "$INSTALL_DIR"
     log "构建应用..."
-    npm run build
+    BETTER_AUTH_URL="http://localhost:3000" npm run build
 
     # Next.js standalone 需手动复制 static 文件和 .env
     mkdir -p "$INSTALL_DIR/.next/standalone/.next"

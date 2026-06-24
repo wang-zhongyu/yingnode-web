@@ -20,7 +20,7 @@ RUN npm ci \
     && npx prisma db push --skip-generate
 
 COPY . .
-RUN npm run build
+RUN BETTER_AUTH_URL=http://localhost:3000 npm run build
 
 FROM base AS runner
 WORKDIR /app
