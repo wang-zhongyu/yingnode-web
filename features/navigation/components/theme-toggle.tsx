@@ -18,10 +18,8 @@ export function ThemeToggle() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger>
-        <Button variant="ghost" size="icon">
-          <Icon className="size-5" />
-        </Button>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
+        <Icon className="size-5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>

@@ -117,6 +117,7 @@ HOTSPOT_SSID="yingnode"
 HOTSPOT_IP="172.16.42.1"
 BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
 BETTER_AUTH_URL="http://172.16.42.1:3000"
+TERMINAL_TOKEN="$(openssl rand -base64 16)"
 EOF
     log ".env 已创建，BETTER_AUTH_URL 使用固定 IP 172.16.42.1"
 }
@@ -128,7 +129,19 @@ install_service() {
     systemctl daemon-reload
     systemctl enable yingnode
     systemctl restart yingnode
-    log "服务已启动"
+
+    # Install ttyd terminal
+    if ! command -v ttyd &>/dev/null; then
+        log "安装 ttyd..."
+        apt-get install -y ttyd
+    fi
+    # Substitute TERMINAL_TOKEN in service file
+    sed "s/\${TERMINAL_TOKEN}/${TERMINAL_TOKEN}/g" \
+        "$INSTALL_DIR/deploy/yingnode-terminal.service" \
+        > /etc/systemd/system/yingnode-terminal.service
+    systemctl enable yingnode-terminal
+    systemctl restart yingnode-terminal
+    log "终端服务 (ttyd) 已启动"
 }
 
 # ---- 显示部署信息 ----

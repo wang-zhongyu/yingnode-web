@@ -9,10 +9,12 @@ import {
   SidebarMenuButton,
 } from "@/components/ui/sidebar"
 import { usePathname } from "next/navigation"
-import { Settings, Activity } from "lucide-react"
+import { Settings, Activity, Package, Container } from "lucide-react"
 
 const navItems = [
   { label: "系统监控", href: "/monitoring", icon: Activity },
+  { label: "应用", href: "/apps", icon: Package },
+  { label: "Docker", href: "/docker", icon: Container },
   { label: "设置", href: "/settings/general", icon: Settings },
 ]
 

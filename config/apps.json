@@ -1,0 +1,51 @@
+{
+  "apps": [
+    {
+      "id": "coolify",
+      "name": "Coolify",
+      "description": "开源自托管 PaaS 平台，一键部署任意应用",
+      "category": "平台",
+      "icon": "cloud",
+      "install": "curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash",
+      "check": "docker ps --format '{{.Names}}' | grep -q coolify"
+    },
+    {
+      "id": "dokploy",
+      "name": "Dokploy",
+      "description": "轻量级自托管平台，支持 Docker Compose",
+      "category": "平台",
+      "icon": "server",
+      "install": "curl -fsSL https://raw.githubusercontent.com/Dokploy/dokploy/main/install.sh | bash",
+      "check": "docker ps --format '{{.Names}}' | grep -q dokploy"
+    },
+    {
+      "id": "nginx",
+      "name": "Nginx",
+      "description": "高性能 Web 服务器和反向代理",
+      "category": "服务",
+      "icon": "globe",
+      "install": "apt-get update && apt-get install -y nginx",
+      "check": "which nginx"
+    },
+    {
+      "id": "portainer",
+      "name": "Portainer",
+      "description": "Docker 可视化管理界面",
+      "category": "工具",
+      "icon": "container",
+      "install": "docker run -d --name portainer --restart=always -p 9443:9443 -v /var/run/docker.sock:/var/run/docker.sock portainer/portainer-ce:latest",
+      "uninstall": "docker stop portainer && docker rm portainer",
+      "check": "docker ps --format '{{.Names}}' | grep -q portainer"
+    },
+    {
+      "id": "homepage",
+      "name": "Homepage",
+      "description": "现代化服务导航面板",
+      "category": "工具",
+      "icon": "home",
+      "install": "docker run -d --name homepage --restart=always -p 3001:3000 -v /opt/homepage:/app/config ghcr.io/gethomepage/homepage:latest",
+      "uninstall": "docker stop homepage && docker rm homepage",
+      "check": "docker ps --format '{{.Names}}' | grep -q homepage"
+    }
+  ]
+}
