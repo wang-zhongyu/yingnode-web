@@ -42,7 +42,7 @@ export default function RootLayout({
           <TooltipProvider>
             {children}
             <ModalProvider />
-            <Toaster />
+            <Toaster richColors/>
           </TooltipProvider>
         </ThemeProvider>
       </body>
