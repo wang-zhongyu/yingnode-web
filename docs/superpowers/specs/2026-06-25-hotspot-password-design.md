@@ -19,6 +19,7 @@ Add WPA2 password protection to the offline hotspot, display the default passwor
 - **Hotspot is always WPA2 encrypted** — no open hotspot option
 - **Random 12-character password** generated at install time — displayed to user and written to `.env`
 - **Active disconnect on forget** — deleting the current WiFi triggers immediate disconnect, so hotspot starts within ~10s (next monitor tick)
+- **WiFi interface self-check** — periodically verify interface is UP and in correct mode; auto-correct if not
 
 ## Implementation
 
@@ -40,6 +41,45 @@ Empty string default maintains backward compatibility with existing databases.
 - Generate `/tmp/hostapd.conf` dynamically with WPA2 settings
 - Start `hostapd -B /tmp/hostapd.conf`
 - Clean up `/tmp/hostapd.conf` in `stopHotspot()`
+
+**`ensureInterfaceReady()` (new method):**
+
+Called at the start of each monitor loop tick and before `startHotspot()`. Checks and corrects:
+
+1. **Interface UP**: `ip link set <iface> up` if DOWN
+2. **Mode check**: Read `iwconfig <iface>` output — if in `Monitor` mode, switch to `managed` (`iwconfig <iface> mode managed`). hostapd with nl80211 driver can switch to AP mode from managed, but NOT from monitor.
+3. **Conflicting processes**: If NetworkManager is running and managing the interface, stop it (`systemctl stop NetworkManager` or `nmcli device set <iface> managed no`). On Kali, NM often fights with manual interface control.
+
+```typescript
+async ensureInterfaceReady(): Promise<{ ok: boolean; reason?: string }> {
+  // 1. Check if interface exists and is UP
+  const upOutput = await execAsync(`ip link show ${this.iface}`)
+  if (upOutput.includes("state DOWN")) {
+    await execAsync(`sudo ip link set ${this.iface} up`)
+  }
+
+  // 2. Check wireless mode
+  const modeOutput = await execAsync(`iwconfig ${this.iface} 2>/dev/null`)
+  if (modeOutput.includes("Mode:Monitor")) {
+    await execAsync(`sudo iwconfig ${this.iface} mode managed`)
+  }
+
+  // 3. Check for NetworkManager interference
+  try {
+    await execAsync("systemctl is-active --quiet NetworkManager")
+    await execAsync(`sudo nmcli device set ${this.iface} managed no 2>/dev/null || true`)
+  } catch {
+    // NetworkManager not running — ok
+  }
+
+  return { ok: true }
+}
+```
+
+**`startHotspot()`:**
+
+- Call `ensureInterfaceReady()` before generating config and starting hostapd
+- If interface cannot be readied, log error and return without starting hostapd
 
 **`forgetWiFi()`:**
 
@@ -113,6 +153,8 @@ Show at end of installation:
 
 On startup, read `HOTSPOT_PASSWORD` from env and seed into `DeviceConfig` if not already set (alongside existing SSID/interface defaults).
 
+In the network monitor loop, call `ensureInterfaceReady()` at the start of each tick before connectivity checks. If interface readiness fails, skip this tick and retry next cycle.
+
 ### 7. Remove Static Config
 
 `config/hostapd.conf` can be removed — config is now generated dynamically. The install script's `configure_system()` step that copies it to `/etc/hostapd/` should skip it.
@@ -122,12 +164,13 @@ On startup, read `HOTSPOT_PASSWORD` from env and seed into `DeviceConfig` if not
 | File | Change |
 |------|--------|
 | `prisma/schema.prisma` | Add `hotspotPassword` to `DeviceConfig` |
-| `shared/lib/network-service.ts` | Dynamic hostapd config generation; active disconnect in `forgetWiFi()` |
+| `shared/lib/network-service.ts` | Dynamic hostapd config generation; active disconnect in `forgetWiFi()`; `ensureInterfaceReady()` |
 | `shared/types/network.ts` | Add `hotspotPassword` to DeviceConfig type |
 | `app/api/settings/device/route.ts` | Extend Zod schema with password field |
 | `features/settings/components/device-config-form.tsx` | Add password input with show/hide toggle |
 | `deploy/install.sh` | Generate random password, display at install completion |
-| `instrumentation.ts` | Seed `HOTSPOT_PASSWORD` env var into DB on startup |
+| `config/sudoers.d/yingnode` | Add `nmcli` to sudo whitelist for NetworkManager interference handling |
+| `instrumentation.ts` | Seed `HOTSPOT_PASSWORD` env var into DB on startup; call `ensureInterfaceReady()` in monitor loop |
 | `config/hostapd.conf` | Delete (replaced by dynamic generation) |
 
 ## Error Handling
@@ -135,6 +178,8 @@ On startup, read `HOTSPOT_PASSWORD` from env and seed into `DeviceConfig` if not
 - If `hostapd` fails to start, log the error and keep `NetworkStatus` as `OFFLINE` (don't falsely set `HOTSPOT_ACTIVE`)
 - If password is empty/not set, fall back to open hotspot (no encryption) to avoid locking users out
 - If `wpa_cli disconnect` fails (interface already down), log and continue — the monitor will still detect offline
+- If `ensureInterfaceReady()` fails (interface missing, cannot be brought UP), log the reason and skip the tick — don't crash the monitor loop
+- NetworkManager interference: best-effort remedy (`nmcli device set managed no`), log warning if NM stops responding but don't block
 
 ## Testing
 
@@ -142,3 +187,6 @@ On startup, read `HOTSPOT_PASSWORD` from env and seed into `DeviceConfig` if not
 - Verify settings page can update password
 - Verify install script generates and displays password
 - Verify deleting current WiFi triggers hotspot within ~10 seconds
+- Verify interface is brought UP if down when monitor runs
+- Verify monitor mode is corrected to managed mode
+- Verify NetworkManager interference is handled gracefully
