@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import { useState } from "react"
+import { Eye, EyeOff } from "lucide-react"
 import {
   deviceConfigSchema,
   type DeviceConfigInput,
@@ -19,11 +20,13 @@ interface Props {
     wifiInterface: string
     hotspotIp: string
     hotspotSsid: string
+    hotspotPassword: string
   }
 }
 
 export function DeviceConfigForm({ config }: Props) {
   const [saving, setSaving] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const {
     register,
@@ -62,7 +65,7 @@ export function DeviceConfigForm({ config }: Props) {
       <Card>
         <CardHeader>
           <CardTitle>设备配置</CardTitle>
-          <CardDescription>配置 WiFi 网卡、热点 IP 和 SSID 等基本参数</CardDescription>
+          <CardDescription>配置 WiFi 网卡、热点 IP、SSID 和密码等基本参数</CardDescription>
         </CardHeader>
         <CardContent>
           <FieldGroup>
@@ -80,6 +83,26 @@ export function DeviceConfigForm({ config }: Props) {
               <FieldLabel>热点 SSID</FieldLabel>
               <Input placeholder="yingnode" {...register("hotspotSsid")} />
               <FieldError errors={errors.hotspotSsid ? [errors.hotspotSsid] : undefined} />
+            </Field>
+            <Field>
+              <FieldLabel>热点密码</FieldLabel>
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="请输入热点密码（至少 8 位）"
+                  {...register("hotspotPassword")}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="absolute right-1 top-1/2 -translate-y-1/2"
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </Button>
+              </div>
+              <FieldError errors={errors.hotspotPassword ? [errors.hotspotPassword] : undefined} />
             </Field>
           </FieldGroup>
         </CardContent>
