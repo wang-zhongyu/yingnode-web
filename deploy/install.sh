@@ -3,7 +3,15 @@ set -euo pipefail
 
 # ============================================================
 # YingNode 一键部署脚本
-# 用法: curl -fsSL <RAW_URL>/deploy/install.sh | sudo bash
+#
+# GitHub:
+#   curl -fsSL https://raw.githubusercontent.com/wang-zhongyu/yingnode-web/main/deploy/install.sh | sudo bash
+#
+# 国内镜像 (Gitee):
+#   curl -fsSL https://gitee.com/wang-zhongyu/yingnode-web/raw/main/deploy/install.sh | sudo bash
+#
+# npm 国内加速:
+#   NPM_MIRROR=https://registry.npmmirror.com curl -fsSL <URL> | sudo bash
 # ============================================================
 
 REPO="https://github.com/wang-zhongyu/yingnode-web.git"
