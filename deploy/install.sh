@@ -76,10 +76,10 @@ deploy_app() {
     fi
 
     log "安装依赖..."
-    npm ci --omit=dev
+    npm ci
 
     log "生成 Prisma Client..."
-    npx prisma generate --no-engine
+    npx prisma generate
 
     log "构建应用..."
     npm run build
