@@ -135,8 +135,8 @@ install_service() {
         log "安装 ttyd..."
         apt-get install -y ttyd
     fi
-    # Substitute TERMINAL_TOKEN in service file
-    sed "s/\${TERMINAL_TOKEN}/${TERMINAL_TOKEN}/g" \
+    # Substitute TERMINAL_TOKEN in service file (use | delimiter to avoid base64 / conflict)
+    sed "s|\${TERMINAL_TOKEN}|${TERMINAL_TOKEN}|g" \
         "$INSTALL_DIR/deploy/yingnode-terminal.service" \
         > /etc/systemd/system/yingnode-terminal.service
     systemctl enable yingnode-terminal
