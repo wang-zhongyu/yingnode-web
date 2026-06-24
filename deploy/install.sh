@@ -84,12 +84,17 @@ deploy_app() {
     log "同步数据库结构..."
     mkdir -p /data
     npx prisma db push
+}
 
+# ---- 构建应用 ----
+build_app() {
+    cd "$INSTALL_DIR"
     log "构建应用..."
     npm run build
 
     # Next.js standalone 不自动加载 .env，复制到 standalone 目录
     cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.next/standalone/.env"
+    log "构建完成"
 }
 
 # ---- 配置系统 ----
@@ -137,11 +142,10 @@ post_install() {
 
 # ---- 安装 systemd 服务 ----
 install_service() {
-    log "安装 systemd 服务..."
+    log "安装 systemd 服务文件..."
     cp "$INSTALL_DIR/deploy/yingnode.service" /etc/systemd/system/yingnode.service
     systemctl daemon-reload
     systemctl enable yingnode
-    systemctl restart yingnode
 
     # Install ttyd terminal (GitHub release fallback for Kali)
     if ! command -v ttyd &>/dev/null; then
@@ -165,8 +169,14 @@ install_service() {
         "$INSTALL_DIR/deploy/yingnode-terminal.service" \
         > /etc/systemd/system/yingnode-terminal.service
     systemctl enable yingnode-terminal
+}
+
+# ---- 启动服务 ----
+start_services() {
+    log "启动服务..."
+    systemctl restart yingnode
     systemctl restart yingnode-terminal
-    log "终端服务 (ttyd) 已启动"
+    log "服务已启动"
 }
 
 # ---- 显示部署信息 ----
@@ -197,8 +207,10 @@ main() {
     configure_env
     deploy_app
     configure_system
-    post_install
     install_service
+    build_app
+    post_install
+    start_services
     show_info
 }
 
