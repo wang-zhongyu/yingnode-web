@@ -159,7 +159,9 @@ build_app() {
     log "构建应用..."
     npm run build
 
-    # Next.js standalone 不自动加载 .env，复制到 standalone 目录
+    # Next.js standalone 需手动复制 static 文件和 .env
+    mkdir -p "$INSTALL_DIR/.next/standalone/.next"
+    cp -r "$INSTALL_DIR/.next/static" "$INSTALL_DIR/.next/standalone/.next/static"
     cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.next/standalone/.env"
     log "构建完成"
 }
