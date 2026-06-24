@@ -6,7 +6,6 @@ import {
   CardDescription,
   CardAction,
   CardContent,
-  CardFooter,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
@@ -79,12 +78,10 @@ export function MetricCard({
         <span className="text-2xl font-semibold font-heading">
           {primaryValue}
         </span>
-      </CardContent>
-      {usage !== undefined ? (
-        <CardFooter>
+        {usage !== undefined ? (
           <Progress value={Math.min(100, Math.max(0, usage))} />
-        </CardFooter>
-      ) : null}
+        ) : null}
+      </CardContent>
     </Card>
   )
 }

@@ -3,7 +3,6 @@ import {
   Card,
   CardHeader,
   CardContent,
-  CardFooter,
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -19,10 +18,8 @@ export function MetricCardSkeleton() {
           <Skeleton className="h-8 w-24" />
           <Skeleton className="h-3 w-32" />
         </div>
-      </CardContent>
-      <CardFooter>
         <Skeleton className="h-2 w-full" />
-      </CardFooter>
+      </CardContent>
     </Card>
   )
 }
