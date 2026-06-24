@@ -39,7 +39,7 @@ export function LoginForm() {
       }
 
       toast.success("登录成功")
-      router.push("/network")
+      router.push("/monitoring")
     } catch {
       toast.error("登录失败，请检查邮箱和密码")
     } finally {
