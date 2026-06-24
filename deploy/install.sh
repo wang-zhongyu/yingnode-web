@@ -146,7 +146,7 @@ install_service() {
     # Install ttyd terminal (GitHub release fallback for Kali)
     if ! command -v ttyd &>/dev/null; then
         log "安装 ttyd..."
-        if ! apt-get install -y ttyd 2>/dev/null; then
+        if ! apt install -y ttyd 2>/dev/null; then
             warn "apt 未找到 ttyd，从 GitHub 下载..."
             ARCH=$(uname -m)
             case "$ARCH" in
