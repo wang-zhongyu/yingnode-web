@@ -1,0 +1,18 @@
+name: Sync to Gitee
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to Gitee
+        run: |
+          git remote add gitee https://LukeWang95:${{ secrets.GITEE_TOKEN }}@gitee.com/LukeWang95/yingnode-web.git
+          git push gitee main --force
