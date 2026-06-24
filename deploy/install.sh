@@ -174,8 +174,14 @@ configure_system() {
 configure_env() {
     if [ -f "$INSTALL_DIR/.env" ]; then
         log ".env 已存在，跳过"
+        # 加载已有配置供后续步骤使用
+        set -a; . "$INSTALL_DIR/.env"; set +a
         return
     fi
+
+    # 先生成密钥，确保 shell 变量可用（供 install_service 的 sed 使用）
+    BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
+    TERMINAL_TOKEN="$(openssl rand -base64 16)"
 
     log "创建 .env 配置..."
     cat > "$INSTALL_DIR/.env" <<EOF
@@ -183,8 +189,8 @@ DATABASE_URL="file:/data/yingnode.db"
 WIFI_INTERFACE="wlan0"
 HOTSPOT_SSID="yingnode"
 HOTSPOT_IP="172.16.42.1"
-BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
-TERMINAL_TOKEN="$(openssl rand -base64 16)"
+BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET}"
+TERMINAL_TOKEN="${TERMINAL_TOKEN}"
 EOF
     log ".env 已创建"
 }
@@ -232,17 +238,25 @@ install_service() {
         fi
     fi
     # Substitute TERMINAL_TOKEN in service file (use | delimiter to avoid base64 / conflict)
-    sed "s|\${TERMINAL_TOKEN}|${TERMINAL_TOKEN}|g" \
-        "$INSTALL_DIR/deploy/yingnode-terminal.service" \
-        > /etc/systemd/system/yingnode-terminal.service
-    systemctl enable yingnode-terminal
+    if [ -n "${TERMINAL_TOKEN:-}" ]; then
+        sed "s|\${TERMINAL_TOKEN}|${TERMINAL_TOKEN}|g" \
+            "$INSTALL_DIR/deploy/yingnode-terminal.service" \
+            > /etc/systemd/system/yingnode-terminal.service
+        systemctl enable yingnode-terminal 2>/dev/null || warn "终端服务注册失败"
+    else
+        warn "TERMINAL_TOKEN 未设置，跳过终端服务"
+    fi
 }
 
 # ---- 启动服务 ----
 start_services() {
     log "启动服务..."
     systemctl restart yingnode
-    systemctl restart yingnode-terminal
+    if [ -f /etc/systemd/system/yingnode-terminal.service ]; then
+        systemctl restart yingnode-terminal
+    else
+        warn "终端服务未安装，跳过"
+    fi
     log "服务已启动"
 }
 
