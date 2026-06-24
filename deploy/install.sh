@@ -172,8 +172,7 @@ configure_system() {
     cp "$INSTALL_DIR/config/sudoers.d/yingnode" /etc/sudoers.d/yingnode
     chmod 440 /etc/sudoers.d/yingnode
 
-    # 确保 hostapd/dnsmasq 配置存在
-    cp -n "$INSTALL_DIR/config/hostapd.conf" /etc/hostapd/hostapd.conf 2>/dev/null || true
+    # dnsmasq config is still static
     cp -n "$INSTALL_DIR/config/dnsmasq.conf" /etc/dnsmasq.conf 2>/dev/null || true
 }
 
@@ -189,6 +188,7 @@ configure_env() {
     # 先生成密钥，确保 shell 变量可用（供 install_service 的 sed 使用）
     BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
     TERMINAL_TOKEN="$(openssl rand -base64 16)"
+    HOTSPOT_PASSWORD="$(openssl rand -base64 9 | tr -d '=+/' | cut -c1-12)"
 
     log "创建 .env 配置..."
     cat > "$INSTALL_DIR/.env" <<EOF
@@ -196,6 +196,7 @@ DATABASE_URL="file:/data/yingnode.db"
 WIFI_INTERFACE="wlan0"
 HOTSPOT_SSID="yingnode"
 HOTSPOT_IP="172.16.42.1"
+HOTSPOT_PASSWORD="${HOTSPOT_PASSWORD}"
 BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET}"
 TERMINAL_TOKEN="${TERMINAL_TOKEN}"
 EOF
@@ -270,15 +271,21 @@ start_services() {
 # ---- 显示部署信息 ----
 show_info() {
     LOCAL_IP=$(ip -4 addr show scope global 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1 || echo "172.16.42.1")
+    # Load HOTSPOT_PASSWORD from .env if not already in env
+    if [ -z "${HOTSPOT_PASSWORD:-}" ] && [ -f "$INSTALL_DIR/.env" ]; then
+        set -a; . "$INSTALL_DIR/.env"; set +a
+    fi
     echo ""
     log "============================================"
     log "  YingNode 部署完成!"
     log "============================================"
-    log "  Web 面板:  http://${LOCAL_IP}:3000"
-    log "  热点 SSID: yingnode"
-    log "  热点 IP:   172.16.42.1"
-    log "  服务状态:  systemctl status yingnode"
-    log "  查看日志:  journalctl -u yingnode -f"
+    log "  Web 面板:     http://${LOCAL_IP}:3000"
+    log "  热点 SSID:    yingnode"
+    log "  热点密码:     ${HOTSPOT_PASSWORD:-未设置}"
+    log "  热点 IP:      172.16.42.1"
+    log "  ----------------------------------------"
+    log "  服务状态:     systemctl status yingnode"
+    log "  查看日志:     journalctl -u yingnode -f"
     log "============================================"
 }
 
