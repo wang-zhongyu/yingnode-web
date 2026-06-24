@@ -46,6 +46,15 @@
       "install": "docker run -d --name homepage --restart=always -p 3001:3000 -v /opt/homepage:/app/config ghcr.io/gethomepage/homepage:latest",
       "uninstall": "docker stop homepage && docker rm homepage",
       "check": "docker ps --format '{{.Names}}' | grep -q homepage"
+    },
+    {
+      "id": "hermes",
+      "name": "Hermes Agent",
+      "description": "Nous Research 开源 AI Agent，支持多平台、持久记忆、子代理调度",
+      "category": "AI",
+      "icon": "cloud",
+      "install": "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash",
+      "check": "which hermes"
     }
   ]
 }

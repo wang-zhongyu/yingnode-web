@@ -19,11 +19,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "App id is required" }, { status: 400 })
     }
 
-    let success: boolean
+    let result: { ok: boolean; output: string }
     if (action === "install") {
-      success = await appStore.installApp(id)
+      result = await appStore.installApp(id)
     } else if (action === "uninstall") {
-      success = await appStore.uninstallApp(id)
+      result = await appStore.uninstallApp(id)
     } else {
       return NextResponse.json(
         { error: "Action must be install or uninstall" },
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       )
     }
 
-    return NextResponse.json({ success })
+    return NextResponse.json({ success: result.ok, output: result.output })
   } catch {
     return NextResponse.json(
       { error: "Failed to perform app action" },

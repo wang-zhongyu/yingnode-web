@@ -39,7 +39,8 @@ export function AppCard({ app, onRefresh }: Props) {
         toast.success(action === "install" ? "安装成功" : "卸载成功")
         onRefresh()
       } else {
-        toast.error(`${action === "install" ? "安装" : "卸载"}失败`)
+        const detail = data.output ? `\n${data.output.slice(-500)}` : ""
+        toast.error(`${action === "install" ? "安装" : "卸载"}失败${detail}`, { duration: 10000 })
       }
     } catch {
       toast.error("操作失败")

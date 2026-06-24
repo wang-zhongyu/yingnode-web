@@ -1,11 +1,42 @@
 import { readFileSync, existsSync } from "fs"
 import { join } from "path"
-import { exec } from "child_process"
-import { promisify } from "util"
+import { spawn } from "child_process"
 import type { AppDefinition, AppWithStatus } from "@/shared/types/app"
 
-const execAsync = promisify(exec)
 const CONFIG_PATH = join(process.cwd(), "config", "apps.json")
+const INSTALL_TIMEOUT = 600_000 // 10 minutes
+
+function execCommand(command: string, timeoutMs = INSTALL_TIMEOUT): Promise<{ ok: boolean; output: string }> {
+  return new Promise((resolve) => {
+    const proc = spawn("bash", ["-c", command], {
+      env: { ...process.env, DEBIAN_FRONTEND: "noninteractive" },
+      timeout: timeoutMs,
+    })
+
+    let output = ""
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      output += chunk.toString()
+    })
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      output += chunk.toString()
+    })
+
+    // Auto-answer "yes" to simple prompts (curl installers that ask "Continue? [y/N]")
+    const autoYes = setInterval(() => {
+      proc.stdin?.write("y\n")
+    }, 2000)
+
+    proc.on("close", (code) => {
+      clearInterval(autoYes)
+      resolve({ ok: code === 0, output: output.slice(-4000) })
+    })
+
+    proc.on("error", (err) => {
+      clearInterval(autoYes)
+      resolve({ ok: false, output: err.message })
+    })
+  })
+}
 
 class AppStore {
   private getDefinitions(): AppDefinition[] {
@@ -23,8 +54,8 @@ class AppStore {
         let installed = false
         if (app.check) {
           try {
-            await execAsync(app.check, { timeout: 5000 })
-            installed = true
+            const { ok } = await execCommand(app.check, 5000)
+            installed = ok
           } catch {
             installed = false
           }
@@ -36,28 +67,18 @@ class AppStore {
     return result
   }
 
-  async installApp(id: string): Promise<boolean> {
+  async installApp(id: string): Promise<{ ok: boolean; output: string }> {
     const app = this.getDefinitions().find((a) => a.id === id)
-    if (!app) return false
+    if (!app) return { ok: false, output: `应用 ${id} 不存在` }
 
-    try {
-      await execAsync(app.install, { timeout: 300000 })
-      return true
-    } catch {
-      return false
-    }
+    return execCommand(app.install)
   }
 
-  async uninstallApp(id: string): Promise<boolean> {
+  async uninstallApp(id: string): Promise<{ ok: boolean; output: string }> {
     const app = this.getDefinitions().find((a) => a.id === id)
-    if (!app?.uninstall) return false
+    if (!app?.uninstall) return { ok: false, output: "该应用不支持卸载" }
 
-    try {
-      await execAsync(app.uninstall, { timeout: 300000 })
-      return true
-    } catch {
-      return false
-    }
+    return execCommand(app.uninstall)
   }
 }
 
