@@ -8,14 +8,14 @@ set -euo pipefail
 #   curl -fsSL https://raw.githubusercontent.com/wang-zhongyu/yingnode-web/main/deploy/install.sh | sudo bash
 #
 # 国内镜像 (Gitee):
-#   curl -fsSL https://gitee.com/wang-zhongyu/yingnode-web/raw/main/deploy/install.sh | sudo bash
+#   curl -fsSL https://gitee.com/LukeWang95/yingnode-web/raw/main/deploy/install.sh | sudo bash
 #
 # npm 国内加速:
 #   NPM_MIRROR=https://registry.npmmirror.com curl -fsSL <URL> | sudo bash
 # ============================================================
 
 REPO="https://github.com/wang-zhongyu/yingnode-web.git"
-REPO_MIRROR="https://gitee.com/wang-zhongyu/yingnode-web.git"
+REPO_MIRROR="https://gitee.com/LukeWang95/yingnode-web.git"
 INSTALL_DIR="/opt/yingnode"
 NODE_VERSION="22"
 SERVICE_NAME="yingnode"
