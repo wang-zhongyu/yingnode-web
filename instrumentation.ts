@@ -12,6 +12,12 @@ export async function register() {
     await networkService.ensureStaticIp()
 
     startNetworkMonitor(networkService)
+
+    // Add: start metrics collector
+    const { startMetricsCollector } = await import(
+      "@/features/monitoring/lib/metrics-collector"
+    )
+    startMetricsCollector()
   }
 }
 
