@@ -31,15 +31,11 @@ export function UserDropdown() {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger
-          render={(props) => (
-            <button {...props} className="cursor-pointer">
-              <Avatar size="sm">
-                <AvatarFallback>{initial}</AvatarFallback>
-              </Avatar>
-            </button>
-          )}
-        />
+        <DropdownMenuTrigger className="cursor-pointer">
+          <Avatar size="sm">
+            <AvatarFallback>{initial}</AvatarFallback>
+          </Avatar>
+        </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuGroup>
             <DropdownMenuLabel>账户</DropdownMenuLabel>
@@ -51,32 +47,20 @@ export function UserDropdown() {
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem
-              render={(props) => (
-                <button
-                  {...props}
-                  onClick={() => router.push("/settings/general")}
-                >
-                  <Settings />
-                  <span>设置</span>
-                </button>
-              )}
-            />
+            <DropdownMenuItem onClick={() => router.push("/settings/general")}>
+              <Settings />
+              <span>设置</span>
+            </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem
               variant="destructive"
-              render={(props) => (
-                <button
-                  {...props}
-                  onClick={() => setLogoutOpen(true)}
-                >
-                  <LogOut />
-                  <span>退出登录</span>
-                </button>
-              )}
-            />
+              onClick={() => setLogoutOpen(true)}
+            >
+              <LogOut />
+              <span>退出登录</span>
+            </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>

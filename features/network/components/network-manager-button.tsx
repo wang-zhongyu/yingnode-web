@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { Popover, PopoverTrigger } from "@/components/ui/popover"
 import { Wifi, WifiOff, Radio, Loader2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { NetworkPopover } from "./network-popover"
 import type { NetworkStatus } from "@/shared/types/network"
 
@@ -56,13 +55,9 @@ export function NetworkManagerButton() {
 
   return (
     <Popover>
-      <PopoverTrigger
-        render={(props) => (
-          <Button variant="ghost" size="sm" className="gap-2" {...props}>
-            {buttonContent()}
-          </Button>
-        )}
-      />
+      <PopoverTrigger className="inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-sm hover:bg-muted">
+        {buttonContent()}
+      </PopoverTrigger>
       <NetworkPopover />
     </Popover>
   )

@@ -20,24 +20,16 @@ export function SettingsSidebar() {
       <SidebarHeader className="px-4 py-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              render={(props) => (
-                <button {...props} onClick={() => router.push("/network")}>
-                  <ArrowLeft className="size-4" />
-                  <span>返回</span>
-                </button>
-              )}
-            />
+            <SidebarMenuButton onClick={() => router.push("/network")}>
+              <ArrowLeft className="size-4" />
+              <span>返回</span>
+            </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              render={(props) => (
-                <div {...props} className="pointer-events-none">
-                  <Settings className="size-4" />
-                  <span className="font-medium">设置</span>
-                </div>
-              )}
-            />
+            <SidebarMenuButton className="pointer-events-none font-medium">
+              <Settings className="size-4" />
+              <span>设置</span>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>

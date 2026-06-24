@@ -33,34 +33,24 @@ export function SidebarUser() {
         <SidebarMenuItem>
           <SidebarMenuButton
             size="lg"
-            render={(props) => (
-              <button
-                {...props}
-                onClick={() => router.push("/settings/general")}
-              >
-                <Avatar size="sm">
-                  <AvatarFallback>{initial}</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{email}</span>
-                </div>
-              </button>
-            )}
-          />
+            onClick={() => router.push("/settings/general")}
+          >
+            <Avatar size="sm">
+              <AvatarFallback>{initial}</AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col text-left text-sm leading-tight">
+              <span className="truncate font-medium">{email}</span>
+            </div>
+          </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
-            render={(props) => (
-              <button
-                {...props}
-                className="text-muted-foreground"
-                onClick={() => setLogoutOpen(true)}
-              >
-                <LogOut />
-                <span>退出登录</span>
-              </button>
-            )}
-          />
+            className="text-muted-foreground"
+            onClick={() => setLogoutOpen(true)}
+          >
+            <LogOut />
+            <span>退出登录</span>
+          </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
       <LogoutAlertDialog
