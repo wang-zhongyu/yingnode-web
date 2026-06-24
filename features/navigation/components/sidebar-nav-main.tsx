@@ -8,15 +8,16 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/components/ui/sidebar"
-import { Wifi, Settings, Activity } from "lucide-react"
+import { usePathname } from "next/navigation"
+import { Settings, Activity } from "lucide-react"
 
 const navItems = [
-  { label: "网络管理", href: "/network", icon: Wifi },
   { label: "系统监控", href: "/monitoring", icon: Activity },
   { label: "设置", href: "/settings/general", icon: Settings },
 ]
 
 export function SidebarNavMain() {
+  const pathname = usePathname()
   return (
     <SidebarGroup>
       <SidebarGroupContent>
@@ -24,6 +25,7 @@ export function SidebarNavMain() {
           {navItems.map((item) => (
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
+                isActive={pathname.startsWith(item.href)}
                 render={(props) => (
                   <Link href={item.href} {...props}>
                     <item.icon />

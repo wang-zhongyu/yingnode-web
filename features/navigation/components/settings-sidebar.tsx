@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Settings } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import {
   Sidebar,
   SidebarHeader,
@@ -20,15 +20,9 @@ export function SettingsSidebar() {
       <SidebarHeader className="px-4 py-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={() => router.push("/network")}>
+            <SidebarMenuButton onClick={() => router.push("/monitoring")}>
               <ArrowLeft className="size-4" />
               <span>返回</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton className="pointer-events-none font-medium">
-              <Settings className="size-4" />
-              <span>设置</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

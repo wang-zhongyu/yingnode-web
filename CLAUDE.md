@@ -97,7 +97,7 @@
   - 全局类型 → `shared/types/`
   - 全局状态 → `shared/stores/`
   - 放错目录是严重违规，必须先自查再创建
-- **目录禁区** — `components/ui/`、`hooks/`、`lib/` 由 shadcn 管理，禁止手动新增或修改文件
+- **目录禁区** — `components/ui/`、`hooks/`、`lib/`、`app/globals.css` 由 shadcn 管理，禁止手动新增或修改文件
 - **业务代码位置** — `features/[name]/` 或 `shared/`，不得放入 shadcn 目录
 - **Server Component 优先** — 默认 Server Component，仅在需要交互/浏览器 API 时加 `"use client"`
 - **Modal 架构** — Zustand store (`shared/stores/use-modal-store.ts`) + ModalProvider (`app/_components/modal-provider.tsx`) 集中注册

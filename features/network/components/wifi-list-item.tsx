@@ -31,7 +31,7 @@ export function WiFiListItem({ network, onConnect }: WiFiListItemProps) {
       className="flex w-full items-center justify-between rounded-md px-2 py-1.5 hover:bg-accent"
       onClick={() => onConnect(network.ssid, network.security !== "OPEN")}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <SignalIcon bars={bars} />
         <span className="text-sm">{network.ssid}</span>
       </div>

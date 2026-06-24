@@ -1,0 +1,25 @@
+[Unit]
+Description=YingNode - Portable Linux Device Manager
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/yingnode
+ExecStart=/usr/bin/node /opt/yingnode/server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=3000
+
+# Security (still needs root for network operations)
+NoNewPrivileges=no
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=yingnode
+
+[Install]
+WantedBy=multi-user.target

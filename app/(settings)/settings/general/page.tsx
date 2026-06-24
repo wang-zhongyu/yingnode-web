@@ -1,10 +1,13 @@
-export default function GeneralSettingsPage() {
+import { getDeviceConfig } from "@/features/settings/lib/device-config"
+import { DeviceConfigForm } from "@/features/settings/components/device-config-form"
+
+export default async function GeneralSettingsPage() {
+  const config = await getDeviceConfig()
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">通用设置</h1>
-      <p className="text-sm text-muted-foreground">
-        通用系统设置（待实现）。
-      </p>
+      <DeviceConfigForm config={config} />
     </div>
   )
 }

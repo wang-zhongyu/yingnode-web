@@ -6,6 +6,7 @@ export interface NetworkStatus {
   lastCheck: string
   currentSSID: string | null
   ipAddress: string | null
+  reachableIp: string | null
 }
 
 export interface WiFiNetwork {

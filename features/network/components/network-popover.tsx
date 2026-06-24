@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react"
 import { PopoverContent } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
-import { Spinner } from "@/components/ui/spinner"
 import { toast } from "sonner"
+import { SpinnerEmpty } from "@/shared/components/spinner-empty"
+import { ListEmpty } from "@/shared/components/list-empty"
 import type { NetworkStatus, WiFiNetwork } from "@/shared/types/network"
 import { useModalStore } from "@/shared/stores/use-modal-store"
 import { CurrentStatus } from "./current-status"
@@ -16,6 +17,7 @@ export function NetworkPopover() {
   const [status, setStatus] = useState<NetworkStatus | null>(null)
   const [networks, setNetworks] = useState<WiFiNetwork[]>([])
   const [scanning, setScanning] = useState(false)
+  const [statusError, setStatusError] = useState(false)
   const openModal = useModalStore((s) => s.open)
 
   useEffect(() => {
@@ -24,10 +26,15 @@ export function NetworkPopover() {
   }, [])
 
   async function fetchStatus() {
-    const res = await fetch("/api/network/status")
-    if (!res.ok) return
-    const data = await res.json()
-    setStatus(data)
+    try {
+      const res = await fetch("/api/network/status")
+      if (!res.ok) throw new Error("Failed")
+      const data = await res.json()
+      setStatus(data)
+      setStatusError(false)
+    } catch {
+      setStatusError(true)
+    }
   }
 
   async function fetchScan() {
@@ -64,28 +71,33 @@ export function NetworkPopover() {
     openModal("manualAddNetwork", { ssid })
   }
 
-  if (!status) {
+  if (!status && !statusError) {
     return (
-      <PopoverContent className="w-80 p-0">
-        <div className="flex items-center justify-center py-4">
-          <Spinner />
-        </div>
+      <PopoverContent className="w-80 p-0 gap-0">
+        <SpinnerEmpty message="加载中..." />
       </PopoverContent>
     )
   }
 
+  const effectiveStatus = status ?? {
+    status: "OFFLINE" as const,
+    currentSSID: null,
+    hotspotActive: false,
+  }
+
   return (
-    <PopoverContent className="w-80 p-0">
+    <PopoverContent className="w-80 p-0 gap-0">
       <CurrentStatus
-        status={status.status}
-        currentSSID={status.currentSSID}
-        hotspotActive={status.hotspotActive}
+        status={effectiveStatus.status}
+        currentSSID={effectiveStatus.currentSSID}
+        hotspotActive={effectiveStatus.hotspotActive}
+        reachableIp={status?.reachableIp ?? null}
       />
       <Separator />
       {scanning ? (
-        <div className="flex items-center justify-center py-4">
-          <Spinner />
-        </div>
+        <SpinnerEmpty message="正在扫描网络..." />
+      ) : networks.length === 0 ? (
+        <ListEmpty message="未发现可用网络" />
       ) : (
         <>
           <WiFiList networks={networks} onConnect={handleConnect} />

@@ -7,6 +7,10 @@ export async function register() {
     // Dynamic import — network-service uses Node.js modules
     // (child_process, path, prisma) which are NOT Edge Runtime compatible.
     const { networkService } = await import("@/shared/lib/network-service")
+
+    // Ensure the device is always reachable on the fixed IP
+    await networkService.ensureStaticIp()
+
     startNetworkMonitor(networkService)
   }
 }

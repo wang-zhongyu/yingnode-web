@@ -16,6 +16,13 @@ model NetworkStatus {
   ipAddress     String?
 }
 
+model DeviceConfig {
+  id            Int    @id @default(1)
+  wifiInterface String @default("wlan0")
+  hotspotIp     String @default("172.16.42.1")
+  hotspotSsid   String @default("yingnode")
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String

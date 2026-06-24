@@ -32,7 +32,7 @@ export function NetworkSettingsSheet() {
           <SheetTitle>网络设置</SheetTitle>
           <SheetDescription>当前网络配置信息</SheetDescription>
         </SheetHeader>
-        <div className="flex flex-col gap-4 mt-4">
+        <div className="flex flex-col gap-4 px-4 mt-4">
           <InfoRow
             label="状态"
             value={

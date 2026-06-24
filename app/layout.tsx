@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ModalProvider } from "@/app/_components/modal-provider"
 import { Toaster } from "@/components/ui/sonner"
+import { ThemeProvider } from "next-themes"
 
 const oxaniumHeading = Oxanium({subsets:['latin'],variable:'--font-heading'});
 
@@ -33,14 +34,17 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", figtree.variable, oxaniumHeading.variable)}
     >
       <body className="min-h-full flex flex-col">
-        <TooltipProvider>
-          {children}
-          <ModalProvider />
-          <Toaster />
-        </TooltipProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <TooltipProvider>
+            {children}
+            <ModalProvider />
+            <Toaster />
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

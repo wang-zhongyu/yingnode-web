@@ -3,7 +3,11 @@ import { promisify } from "util"
 import { readFile } from "fs/promises"
 import type { SystemMetrics } from "@/shared/types/monitoring"
 
-const execAsync = promisify(exec)
+const execAsyncBase = promisify(exec)
+
+function execAsync(command: string, timeoutMs = 8000) {
+  return execAsyncBase(command, { timeout: timeoutMs })
+}
 
 class SystemMonitor {
   private prevIdle = 0
@@ -11,11 +15,11 @@ class SystemMonitor {
 
   async getMetrics(): Promise<SystemMetrics> {
     const [cpu, memory, disk, temp, uptime] = await Promise.all([
-      this.getCpuUsage(),
-      this.getMemory(),
-      this.getDisk(),
-      this.getTemp(),
-      this.getUptime(),
+      this.getCpuUsage().catch(() => ({ usage: 0 })),
+      this.getMemory().catch(() => ({ total: 0, used: 0, usage: 0 })),
+      this.getDisk().catch(() => ({ total: 0, used: 0, usage: 0 })),
+      this.getTemp().catch(() => ({ celsius: 0 })),
+      this.getUptime().catch(() => ({ days: 0, hours: 0, minutes: 0, totalSeconds: 0 })),
     ])
 
     return { cpu, memory, disk, temp, uptime }
@@ -86,16 +90,22 @@ class SystemMonitor {
   }
 
   private async getTemp() {
-    try {
-      const data = await readFile(
-        "/sys/class/thermal/thermal_zone0/temp",
-        "utf-8",
-      )
-      const millidegrees = parseInt(data.trim(), 10)
-      return { celsius: Math.round(millidegrees / 1000) }
-    } catch {
-      return { celsius: 0 }
+    const paths = [
+      "/sys/class/thermal/thermal_zone0/temp",
+      "/sys/class/thermal/thermal_zone1/temp",
+    ]
+    for (const path of paths) {
+      try {
+        const data = await readFile(path, "utf-8")
+        const millidegrees = parseInt(data.trim(), 10)
+        if (!isNaN(millidegrees)) {
+          return { celsius: Math.round(millidegrees / 1000) }
+        }
+      } catch {
+        // try next path
+      }
     }
+    return { celsius: 0 }
   }
 
   private async getUptime() {

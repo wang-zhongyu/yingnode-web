@@ -14,7 +14,7 @@ export async function proxy(request: NextRequest) {
   // Root path — redirect based on auth state
   if (pathname === "/") {
     if (isAuthenticated) {
-      return NextResponse.redirect(new URL("/network", request.url))
+      return NextResponse.redirect(new URL("/monitoring", request.url))
     }
 
     const usersExist = await checkUsersExist()
@@ -27,7 +27,7 @@ export async function proxy(request: NextRequest) {
   // /setup — only accessible when no users exist and not authenticated
   if (pathname.startsWith("/setup")) {
     if (isAuthenticated) {
-      return NextResponse.redirect(new URL("/network", request.url))
+      return NextResponse.redirect(new URL("/monitoring", request.url))
     }
 
     const usersExist = await checkUsersExist()
@@ -41,14 +41,13 @@ export async function proxy(request: NextRequest) {
   // /login — redirect to dashboard if already authenticated
   if (pathname.startsWith("/login")) {
     if (isAuthenticated) {
-      return NextResponse.redirect(new URL("/network", request.url))
+      return NextResponse.redirect(new URL("/monitoring", request.url))
     }
     return NextResponse.next()
   }
 
   // Protected routes: /(dashboard) and /(settings)
   const isProtectedRoute =
-    pathname.startsWith("/network") ||
     pathname.startsWith("/monitoring") ||
     pathname.startsWith("/settings")
 

@@ -32,16 +32,18 @@ function formatUptime(
 
 export function MonitoringGrid() {
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     async function fetchMetrics() {
       try {
         const res = await fetch("/api/monitoring")
-        if (!res.ok) return
+        if (!res.ok) throw new Error("Failed to fetch")
         const data = await res.json()
         setMetrics(data)
+        setError(false)
       } catch {
-        /* ignore network errors */
+        setError(true)
       }
     }
 
@@ -49,6 +51,14 @@ export function MonitoringGrid() {
     const interval = setInterval(fetchMetrics, 10_000)
     return () => clearInterval(interval)
   }, [])
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <p className="text-sm text-muted-foreground">无法获取系统指标</p>
+      </div>
+    )
+  }
 
   if (!metrics) {
     return (

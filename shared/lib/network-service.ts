@@ -1,6 +1,7 @@
 import { exec } from "child_process"
 import { promisify } from "util"
 import { prisma } from "@/shared/lib/prisma"
+import { getDeviceConfig } from "@/features/settings/lib/device-config"
 import type { NetworkStatus, WiFiNetwork, ConnectResult } from "@/shared/types/network"
 
 const execAsyncBase = promisify(exec)
@@ -10,13 +11,50 @@ function execAsync(command: string, timeoutMs = 8000) {
   return execAsyncBase(command, { timeout: timeoutMs })
 }
 
-const WIFI_INTERFACE = process.env.WIFI_INTERFACE ?? "wlan0"
-const HOTSPOT_SSID = process.env.HOTSPOT_SSID ?? "yingnode"
-const HOTSPOT_IP = process.env.HOTSPOT_IP ?? "172.16.42.1"
 const PING_TARGET = "8.8.8.8"
 const DNS_TEST_DOMAIN = "google.com"
 
 class NetworkService {
+  private staticIpEnsured = false
+  private configCache: { wifiInterface: string; hotspotIp: string; hotspotSsid: string } | null = null
+
+  /** Read device config from DB, with env-var fallback. Cached after first read. */
+  async getConfig() {
+    if (!this.configCache) {
+      this.configCache = await getDeviceConfig()
+    }
+    return this.configCache
+  }
+
+  /** Clear cached config so next read pulls fresh values from DB.
+   *  Also resets staticIpEnsured so the new IP gets bound on next ensureStaticIp call. */
+  clearConfigCache(): void {
+    this.configCache = null
+    this.staticIpEnsured = false
+  }
+
+  /** Ensure the fixed IP is always bound to the interface as secondary.
+   *  This means the device is always reachable at 172.16.42.1 whether
+   *  in hotspot mode or connected to an external WiFi network. */
+  async ensureStaticIp(): Promise<void> {
+    // Avoid redundant sudo calls — only add once per process lifetime
+    if (this.staticIpEnsured) return
+
+    const { wifiInterface, hotspotIp } = await this.getConfig()
+
+    try {
+      // Check if IP already exists on interface
+      const { stdout } = await execAsync(`ip -4 addr show dev ${wifiInterface}`)
+      if (!stdout.includes(hotspotIp)) {
+        await execAsync(`sudo ip addr add ${hotspotIp}/24 dev ${wifiInterface}`)
+      }
+      this.staticIpEnsured = true
+    } catch {
+      // Non-fatal — the device can still work, just not on the fixed IP
+      console.warn(`[network] Failed to add static IP ${hotspotIp} on ${wifiInterface}`)
+    }
+  }
+
   async checkConnectivity(): Promise<boolean> {
     try {
       await execAsync(`ping -c 1 -W 2 ${PING_TARGET}`)
@@ -51,6 +89,7 @@ class NetworkService {
         lastCheck: new Date().toISOString(),
         currentSSID: null,
         ipAddress: null,
+        reachableIp: null,
       }
     }
     return {
@@ -59,6 +98,7 @@ class NetworkService {
       lastCheck: record.lastCheck.toISOString(),
       currentSSID: record.currentSSID,
       ipAddress: record.ipAddress,
+      reachableIp: null,
     }
   }
 
@@ -74,9 +114,8 @@ class NetworkService {
     const existingStatus = await this.getStatus()
     if (existingStatus.hotspotActive) return
 
-    try {
-      await execAsync(`sudo ip addr add ${HOTSPOT_IP}/24 dev ${WIFI_INTERFACE}`)
-    } catch { /* IP may already exist */ }
+    this.staticIpEnsured = false
+    await this.ensureStaticIp()
 
     await execAsync(`sudo hostapd -B /etc/hostapd/hostapd.conf`)
     await execAsync(`sudo dnsmasq -C /etc/dnsmasq.conf`)
@@ -91,12 +130,17 @@ class NetworkService {
     try { await execAsync("sudo killall hostapd") } catch { /* not running */ }
     try { await execAsync("sudo killall dnsmasq") } catch { /* not running */ }
 
+    // Keep static IP on interface so the device remains reachable
+    this.staticIpEnsured = false
+    await this.ensureStaticIp()
+
     await this.updateDB({ status: "ONLINE", hotspotActive: false })
   }
 
   async scanWiFi(): Promise<WiFiNetwork[]> {
+    const { wifiInterface } = await this.getConfig()
     try {
-      const { stdout } = await execAsync(`sudo iwlist ${WIFI_INTERFACE} scan`, 10000)
+      const { stdout } = await execAsync(`sudo iwlist ${wifiInterface} scan`, 10000)
       return this.parseIwlist(stdout)
     } catch {
       return []
@@ -127,26 +171,56 @@ class NetworkService {
     return networks.sort((a, b) => b.signal - a.signal)
   }
 
-  async connectWiFi(ssid: string, password?: string): Promise<ConnectResult> {
+  /** Get the IP address that other devices on the current network can use to
+   *  reach this device. In hotspot mode returns the fixed hotspot IP.
+   *  On an external network returns the DHCP-assigned IP. */
+  async getReachableIp(): Promise<string | null> {
+    const { wifiInterface, hotspotIp } = await this.getConfig()
+    const status = await this.getStatus()
+
     try {
-      if (password) {
-        await execAsync(`wpa_cli -i ${WIFI_INTERFACE} add_network`)
-        await execAsync(`wpa_cli -i ${WIFI_INTERFACE} set_network 0 ssid '"${ssid}"'`)
-        await execAsync(`wpa_cli -i ${WIFI_INTERFACE} set_network 0 psk '"${password}"'`)
-        await execAsync(`wpa_cli -i ${WIFI_INTERFACE} enable_network 0`)
-      } else {
-        await execAsync(`wpa_cli -i ${WIFI_INTERFACE} add_network`)
-        await execAsync(`wpa_cli -i ${WIFI_INTERFACE} set_network 0 ssid '"${ssid}"'`)
-        await execAsync(`wpa_cli -i ${WIFI_INTERFACE} set_network 0 key_mgmt NONE`)
-        await execAsync(`wpa_cli -i ${WIFI_INTERFACE} enable_network 0`)
+      const { stdout } = await execAsync(`ip -4 addr show dev ${wifiInterface}`)
+      const matches = [...stdout.matchAll(/inet (\d+\.\d+\.\d+\.\d+)\/\d+ scope global/g)]
+      const ips = matches.map(m => m[1])
+
+      // In hotspot mode: return the fixed IP (clients connect to the AP via this)
+      if (status.hotspotActive) {
+        return ips.includes(hotspotIp) ? hotspotIp : null
       }
 
-      await execAsync(`wpa_cli -i ${WIFI_INTERFACE} save_config`)
-      await execAsync(`wpa_cli -i ${WIFI_INTERFACE} reconfigure`)
+      // In external WiFi mode: return the non-hotspot IP (DHCP or static LAN IP)
+      return ips.find(ip => ip !== hotspotIp) ?? null
+    } catch {
+      return null
+    }
+  }
+
+  async connectWiFi(ssid: string, password?: string): Promise<ConnectResult> {
+    const { wifiInterface } = await this.getConfig()
+
+    try {
+      if (password) {
+        await execAsync(`wpa_cli -i ${wifiInterface} add_network`)
+        await execAsync(`wpa_cli -i ${wifiInterface} set_network 0 ssid '"${ssid}"'`)
+        await execAsync(`wpa_cli -i ${wifiInterface} set_network 0 psk '"${password}"'`)
+        await execAsync(`wpa_cli -i ${wifiInterface} enable_network 0`)
+      } else {
+        await execAsync(`wpa_cli -i ${wifiInterface} add_network`)
+        await execAsync(`wpa_cli -i ${wifiInterface} set_network 0 ssid '"${ssid}"'`)
+        await execAsync(`wpa_cli -i ${wifiInterface} set_network 0 key_mgmt NONE`)
+        await execAsync(`wpa_cli -i ${wifiInterface} enable_network 0`)
+      }
+
+      await execAsync(`wpa_cli -i ${wifiInterface} save_config`)
+      await execAsync(`wpa_cli -i ${wifiInterface} reconfigure`)
 
       await new Promise((resolve) => setTimeout(resolve, 5000))
 
-      const { stdout } = await execAsync(`wpa_cli -i ${WIFI_INTERFACE} status`)
+      // Re-add static IP after DHCP overwrites the interface
+      this.staticIpEnsured = false
+      await this.ensureStaticIp()
+
+      const { stdout } = await execAsync(`wpa_cli -i ${wifiInterface} status`)
       const ipMatch = stdout.match(/ip_address=(.+)/)
       const ipAddress = ipMatch ? ipMatch[1] : null
 

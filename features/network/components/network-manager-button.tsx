@@ -8,15 +8,19 @@ import type { NetworkStatus } from "@/shared/types/network"
 
 export function NetworkManagerButton() {
   const [status, setStatus] = useState<NetworkStatus | null>(null)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     async function poll() {
       try {
         const res = await fetch("/api/network/status")
-        if (!res.ok) return
+        if (!res.ok) throw new Error("Failed")
         const data = await res.json()
         setStatus(data)
-      } catch { /* ignore network errors */ }
+        setError(false)
+      } catch {
+        setError(true)
+      }
     }
     poll()
     const interval = setInterval(poll, 10_000)
@@ -24,6 +28,15 @@ export function NetworkManagerButton() {
   }, [])
 
   function buttonContent() {
+    if (error) {
+      return (
+        <>
+          <WifiOff className="size-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">无法获取状态</span>
+        </>
+      )
+    }
+
     if (!status) return <Loader2 className="size-4 animate-spin" />
 
     switch (status.status) {
