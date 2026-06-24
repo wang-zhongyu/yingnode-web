@@ -40,6 +40,14 @@ model DeviceConfig {
   hotspotSsid   String @default("yingnode")
 }
 
+model WiFiRecord {
+  id        Int       @id @default(autoincrement())
+  ssid      String    @unique
+  security  String    @default("WPA2")
+  addedAt   DateTime  @default(now())
+  lastUsed  DateTime?
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String

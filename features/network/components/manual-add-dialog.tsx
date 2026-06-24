@@ -11,6 +11,13 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { useModalStore } from "@/shared/stores/use-modal-store"
 import { toast } from "sonner"
@@ -19,6 +26,7 @@ export function ManualAddDialog() {
   const { type, isOpen, close, data } = useModalStore()
   const [ssid, setSSID] = useState(data.ssid ?? "")
   const [password, setPassword] = useState("")
+  const [security, setSecurity] = useState("WPA2")
   const [connecting, setConnecting] = useState(false)
 
   if (type !== "manualAddNetwork") return null
@@ -32,7 +40,7 @@ export function ManualAddDialog() {
       const res = await fetch("/api/network/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ssid: trimmedSSID, password }),
+        body: JSON.stringify({ ssid: trimmedSSID, password, security }),
       })
       const data = await res.json()
       if (!data.success) {
@@ -66,6 +74,22 @@ export function ManualAddDialog() {
               onChange={(e) => setSSID(e.target.value)}
               placeholder="输入 Wi-Fi 名称"
             />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="manual-security" className="text-sm font-medium">
+              安全类型
+            </label>
+            <Select value={security} onValueChange={(v) => setSecurity(v ?? "WPA2")}>
+              <SelectTrigger id="manual-security">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="WPA2">WPA2</SelectItem>
+                <SelectItem value="WPA">WPA</SelectItem>
+                <SelectItem value="WEP">WEP</SelectItem>
+                <SelectItem value="OPEN">开放网络</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <Separator />
           <div className="flex flex-col gap-1.5">

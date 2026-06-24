@@ -31,3 +31,17 @@ export interface ConnectResult {
   ipAddress: string | null
   error?: string
 }
+
+export interface InterfaceStatus {
+  name: string
+  state: "UP" | "DOWN" | "UNKNOWN"
+  ipv4?: string
+}
+
+export interface WiFiRecordItem {
+  id: number
+  ssid: string
+  security: string
+  addedAt: string
+  lastUsed: string | null
+}

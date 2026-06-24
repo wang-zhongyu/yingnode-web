@@ -171,6 +171,111 @@ class NetworkService {
     return networks.sort((a, b) => b.signal - a.signal)
   }
 
+  /** List physical network interfaces with their operstate and IPv4 address.
+   *  Filters out loopback. */
+  async getInterfaceStatuses(): Promise<
+    Array<{ name: string; state: "UP" | "DOWN" | "UNKNOWN"; ipv4?: string }>
+  > {
+    try {
+      const { stdout: linkOut } = await execAsync("ip -o link show")
+      const stateMap = new Map<string, string>()
+      for (const line of linkOut.split("\n")) {
+        const m = line.match(/^\d+:\s+(\S+):\s+<.*?(UP|DOWN)/)
+        if (!m) continue
+        const iface = m[1].includes("@") ? m[1].split("@")[0] : m[1]
+        stateMap.set(iface, m[2].startsWith("UP") ? "UP" : "DOWN")
+      }
+
+      const { stdout: addrOut } = await execAsync("ip -o -4 addr show")
+      const ipMap = new Map<string, string>()
+      for (const line of addrOut.split("\n")) {
+        const m = line.match(/^\d+:\s+(\S+)\s+inet\s+([\d.]+)/)
+        if (!m) continue
+        const iface = m[1].includes("@") ? m[1].split("@")[0] : m[1]
+        ipMap.set(iface, m[2])
+      }
+
+      const result: Array<{
+        name: string
+        state: "UP" | "DOWN" | "UNKNOWN"
+        ipv4?: string
+      }> = []
+      for (const [name, state] of stateMap) {
+        if (name === "lo") continue
+        result.push({
+          name,
+          state: state as "UP" | "DOWN",
+          ipv4: ipMap.get(name),
+        })
+      }
+
+      return result
+    } catch {
+      return []
+    }
+  }
+
+  /** Read all saved WiFi records from the database. */
+  async getSavedWiFi(): Promise<
+    Array<{
+      id: number
+      ssid: string
+      security: string
+      addedAt: string
+      lastUsed: string | null
+    }>
+  > {
+    const records = await prisma.wiFiRecord.findMany({
+      orderBy: { addedAt: "desc" },
+    })
+    return records.map((r) => ({
+      id: r.id,
+      ssid: r.ssid,
+      security: r.security,
+      addedAt: r.addedAt.toISOString(),
+      lastUsed: r.lastUsed?.toISOString() ?? null,
+    }))
+  }
+
+  /** Find the wpa_cli network ID for a given SSID. Returns null if not found. */
+  private async getWpaNetworkId(
+    ssid: string,
+    iface: string,
+  ): Promise<number | null> {
+    try {
+      const { stdout } = await execAsync(`wpa_cli -i ${iface} list_networks`)
+      const lines = stdout.split("\n").slice(1)
+      for (const line of lines) {
+        const parts = line.split("\t")
+        if (parts.length < 2) continue
+        const id = parseInt(parts[0], 10)
+        const name = parts[1]
+        if (!isNaN(id) && name === ssid) return id
+      }
+      return null
+    } catch {
+      return null
+    }
+  }
+
+  /** Remove a saved WiFi network from both wpa_supplicant and the database. */
+  async forgetWiFi(id: number, ssid: string): Promise<boolean> {
+    const { wifiInterface } = await this.getConfig()
+
+    try {
+      const networkId = await this.getWpaNetworkId(ssid, wifiInterface)
+      if (networkId !== null) {
+        await execAsync(`wpa_cli -i ${wifiInterface} remove_network ${networkId}`)
+        await execAsync(`wpa_cli -i ${wifiInterface} save_config`)
+      }
+    } catch {
+      // Non-fatal — still remove from DB even if wpa_cli fails
+    }
+
+    await prisma.wiFiRecord.delete({ where: { id } })
+    return true
+  }
+
   /** Get the IP address that other devices on the current network can use to
    *  reach this device. In hotspot mode returns the fixed hotspot IP.
    *  On an external network returns the DHCP-assigned IP. */
@@ -195,7 +300,7 @@ class NetworkService {
     }
   }
 
-  async connectWiFi(ssid: string, password?: string): Promise<ConnectResult> {
+  async connectWiFi(ssid: string, password?: string, security?: string): Promise<ConnectResult> {
     const { wifiInterface } = await this.getConfig()
 
     try {
@@ -225,6 +330,17 @@ class NetworkService {
       const ipAddress = ipMatch ? ipMatch[1] : null
 
       await this.updateDB({ currentSSID: ssid, ipAddress })
+
+      // Track WiFi connection in saved records
+      try {
+        await prisma.wiFiRecord.upsert({
+          where: { ssid },
+          update: { lastUsed: new Date() },
+          create: { ssid, security: security ?? (password ? "WPA2" : "OPEN") },
+        })
+      } catch {
+        // Non-fatal: WiFiRecord tracking failure should not block connection flow
+      }
 
       return { success: true, ssid, ipAddress }
     } catch (error) {
