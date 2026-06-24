@@ -143,10 +143,22 @@ install_service() {
     systemctl enable yingnode
     systemctl restart yingnode
 
-    # Install ttyd terminal
+    # Install ttyd terminal (GitHub release fallback for Kali)
     if ! command -v ttyd &>/dev/null; then
         log "安装 ttyd..."
-        apt-get install -y ttyd
+        if ! apt-get install -y ttyd 2>/dev/null; then
+            warn "apt 未找到 ttyd，从 GitHub 下载..."
+            ARCH=$(uname -m)
+            case "$ARCH" in
+                x86_64)  TTYD_ARCH="x86_64" ;;
+                aarch64) TTYD_ARCH="aarch64" ;;
+                armv7l)  TTYD_ARCH="armv7" ;;
+                *)       err "不支持的架构: $ARCH" ;;
+            esac
+            curl -fsSL "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.${TTYD_ARCH}" -o /usr/local/bin/ttyd
+            chmod +x /usr/local/bin/ttyd
+            log "ttyd 安装完成"
+        fi
     fi
     # Substitute TERMINAL_TOKEN in service file (use | delimiter to avoid base64 / conflict)
     sed "s|\${TERMINAL_TOKEN}|${TERMINAL_TOKEN}|g" \
