@@ -34,10 +34,11 @@ model MetricsSnapshot {
 }
 
 model DeviceConfig {
-  id            Int    @id @default(1)
-  wifiInterface String @default("wlan0")
-  hotspotIp     String @default("172.16.42.1")
-  hotspotSsid   String @default("yingnode")
+  id              Int    @id @default(1)
+  wifiInterface   String @default("wlan0")
+  hotspotIp       String @default("172.16.42.1")
+  hotspotSsid     String @default("yingnode")
+  hotspotPassword String @default("")
 }
 
 model WiFiRecord {
