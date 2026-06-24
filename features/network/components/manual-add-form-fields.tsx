@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -22,15 +22,15 @@ export function ManualAddFormFields({
   connecting,
   onConnect,
 }: ManualAddFormFieldsProps) {
-  const [ssid, setSSID] = useState(initialSSID)
-  const [password, setPassword] = useState("")
+  const ssidRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
   const [security, setSecurity] = useState("WPA2")
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const trimmedSSID = ssid.trim()
-    if (!trimmedSSID) return
-    onConnect(trimmedSSID, password, security)
+    const ssid = ssidRef.current?.value.trim()
+    if (!ssid) return
+    onConnect(ssid, passwordRef.current?.value ?? "", security)
   }
 
   return (
@@ -42,8 +42,9 @@ export function ManualAddFormFields({
           </label>
           <Input
             id="manual-ssid"
-            value={ssid}
-            onChange={(e) => setSSID(e.target.value)}
+            name="ssid"
+            ref={ssidRef}
+            defaultValue={initialSSID}
             placeholder="输入 Wi-Fi 名称"
             disabled={connecting}
           />
@@ -74,9 +75,9 @@ export function ManualAddFormFields({
           </label>
           <Input
             id="manual-password"
+            name="password"
             type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            ref={passwordRef}
             placeholder="输入密码（开放网络留空）"
             disabled={connecting}
           />

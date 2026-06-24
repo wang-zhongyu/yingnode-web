@@ -145,8 +145,9 @@ class NetworkService {
 
   async scanWiFi(): Promise<WiFiNetwork[]> {
     const { wifiInterface } = await this.getConfig()
+    const escapedIface = this.escapeShellArg(wifiInterface)
     try {
-      const { stdout } = await execAsync(`sudo iwlist ${wifiInterface} scan`, 10000)
+      const { stdout } = await execAsync(`sudo iwlist ${escapedIface} scan`, 10000)
       return this.parseIwlist(stdout)
     } catch {
       return []
@@ -251,7 +252,10 @@ class NetworkService {
     iface: string,
   ): Promise<number | null> {
     try {
-      const { stdout } = await execAsync(`wpa_cli -i ${iface} list_networks`)
+      const escapedIface = this.escapeShellArg(iface)
+      const { stdout } = await execAsync(
+        `wpa_cli -i ${escapedIface} list_networks`,
+      )
       const lines = stdout.split("\n").slice(1)
       for (const line of lines) {
         const parts = line.split("\t")
@@ -266,18 +270,31 @@ class NetworkService {
     }
   }
 
-  /** Remove a saved WiFi network from both wpa_supplicant and the database. */
-  async forgetWiFi(id: number, ssid: string): Promise<boolean> {
+  /** Remove a saved WiFi network from both wpa_supplicant and the database.
+   *  Loads the record by id to get the authoritative SSID — the caller cannot
+   *  specify a different SSID than the one stored for this record. */
+  async forgetWiFi(id: number): Promise<boolean> {
+    const record = await prisma.wiFiRecord.findUnique({ where: { id } })
+    if (!record) {
+      throw new Error("WiFi record not found")
+    }
+
     const { wifiInterface } = await this.getConfig()
+    const escapedIface = this.escapeShellArg(wifiInterface)
 
     try {
-      const networkId = await this.getWpaNetworkId(ssid, wifiInterface)
+      const networkId = await this.getWpaNetworkId(record.ssid, wifiInterface)
       if (networkId !== null) {
-        await execAsync(`wpa_cli -i ${wifiInterface} remove_network ${networkId}`)
-        await execAsync(`wpa_cli -i ${wifiInterface} save_config`)
+        await execAsync(
+          `wpa_cli -i ${escapedIface} remove_network ${networkId}`,
+        )
+        await execAsync(`wpa_cli -i ${escapedIface} save_config`)
       }
     } catch (err) {
-      console.warn(`[network] Failed to remove wpa_cli network for "${ssid}":`, err)
+      console.warn(
+        `[network] Failed to remove wpa_cli network for "${record.ssid}":`,
+        err,
+      )
     }
 
     await prisma.wiFiRecord.delete({ where: { id } })
@@ -314,8 +331,9 @@ class NetworkService {
 
     try {
       // Capture the network ID returned by add_network
+      const escapedIface = this.escapeShellArg(wifiInterface)
       const { stdout: addOut } = await execAsync(
-        `wpa_cli -i ${wifiInterface} add_network`,
+        `wpa_cli -i ${escapedIface} add_network`,
       )
       const networkId = parseInt(addOut.trim(), 10)
       if (isNaN(networkId)) {
@@ -325,23 +343,23 @@ class NetworkService {
       if (password) {
         const escapedPwd = this.escapeShellArg(password)
         await execAsync(
-          `wpa_cli -i ${wifiInterface} set_network ${networkId} ssid '"${escapedSSID}"'`,
+          `wpa_cli -i ${escapedIface} set_network ${networkId} ssid '"${escapedSSID}"'`,
         )
         await execAsync(
-          `wpa_cli -i ${wifiInterface} set_network ${networkId} psk '"${escapedPwd}"'`,
+          `wpa_cli -i ${escapedIface} set_network ${networkId} psk '"${escapedPwd}"'`,
         )
       } else {
         await execAsync(
-          `wpa_cli -i ${wifiInterface} set_network ${networkId} ssid '"${escapedSSID}"'`,
+          `wpa_cli -i ${escapedIface} set_network ${networkId} ssid '"${escapedSSID}"'`,
         )
         await execAsync(
-          `wpa_cli -i ${wifiInterface} set_network ${networkId} key_mgmt NONE`,
+          `wpa_cli -i ${escapedIface} set_network ${networkId} key_mgmt NONE`,
         )
       }
 
-      await execAsync(`wpa_cli -i ${wifiInterface} enable_network ${networkId}`)
-      await execAsync(`wpa_cli -i ${wifiInterface} save_config`)
-      await execAsync(`wpa_cli -i ${wifiInterface} reconfigure`)
+      await execAsync(`wpa_cli -i ${escapedIface} enable_network ${networkId}`)
+      await execAsync(`wpa_cli -i ${escapedIface} save_config`)
+      await execAsync(`wpa_cli -i ${escapedIface} reconfigure`)
 
       await new Promise((resolve) => setTimeout(resolve, 5000))
 
@@ -349,7 +367,7 @@ class NetworkService {
       this.staticIpEnsured = false
       await this.ensureStaticIp()
 
-      const { stdout } = await execAsync(`wpa_cli -i ${wifiInterface} status`)
+      const { stdout } = await execAsync(`wpa_cli -i ${escapedIface} status`)
       const ipMatch = stdout.match(/ip_address=(.+)/)
       const ipAddress = ipMatch ? ipMatch[1] : null
 
@@ -372,7 +390,14 @@ class NetworkService {
       if (msg.includes("WRONG_KEY")) {
         return { success: false, ssid: null, ipAddress: null, error: "密码错误" }
       }
-      return { success: false, ssid: null, ipAddress: null, error: "连接超时，请确认密码正确" }
+      if (msg.includes("command not found") || msg.includes("ENOENT")) {
+        return { success: false, ssid: null, ipAddress: null, error: "wpa_cli 未安装或不可用" }
+      }
+      if (msg.includes("timed out") || msg.includes("ETIMEDOUT")) {
+        return { success: false, ssid: null, ipAddress: null, error: "连接超时，请确认密码正确" }
+      }
+      console.error("[network] connectWiFi failed:", msg)
+      return { success: false, ssid: null, ipAddress: null, error: `连接失败: ${msg}` }
     }
   }
 }

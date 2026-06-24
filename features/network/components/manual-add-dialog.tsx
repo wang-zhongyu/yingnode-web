@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,7 @@ import { toast } from "sonner"
 export function ManualAddDialog() {
   const { type, isOpen, close, data } = useModalStore()
   const [connecting, setConnecting] = useState(false)
+  const router = useRouter()
 
   if (type !== "manualAddNetwork") return null
 
@@ -35,6 +37,7 @@ export function ManualAddDialog() {
       }
       toast.success(`已连接到 "${ssid}"`)
       close()
+      router.refresh()
     } catch {
       toast.error("连接失败")
     } finally {
@@ -58,13 +61,7 @@ export function ManualAddDialog() {
           <Button variant="outline" onClick={close}>
             取消
           </Button>
-          <Button
-            onClick={() => {
-              const form = document.getElementById("manual-add-form") as HTMLFormElement
-              form?.requestSubmit()
-            }}
-            disabled={connecting}
-          >
+          <Button form="manual-add-form" type="submit" disabled={connecting}>
             {connecting ? "连接中..." : "连接"}
           </Button>
         </DialogFooter>

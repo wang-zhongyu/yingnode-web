@@ -27,10 +27,6 @@ export function WiFiRecordsCard({ initialRecords }: WiFiRecordsCardProps) {
     }
   }, [])
 
-  function handleAdd() {
-    open("manualAddNetwork")
-  }
-
   if (records.length === 0) {
     return (
       <Card>
@@ -43,7 +39,7 @@ export function WiFiRecordsCard({ initialRecords }: WiFiRecordsCardProps) {
           </p>
         </CardContent>
         <CardFooter>
-          <Button variant="outline" size="sm" onClick={handleAdd}>
+          <Button variant="outline" size="sm" onClick={() => open("manualAddNetwork")}>
             <Plus className="h-4 w-4 mr-1" />
             添加
           </Button>
@@ -66,7 +62,7 @@ export function WiFiRecordsCard({ initialRecords }: WiFiRecordsCardProps) {
         ))}
       </CardContent>
       <CardFooter>
-        <Button variant="outline" size="sm" onClick={handleAdd}>
+        <Button variant="outline" size="sm" onClick={() => open("manualAddNetwork")}>
           <Plus className="h-4 w-4 mr-1" />
           添加
         </Button>

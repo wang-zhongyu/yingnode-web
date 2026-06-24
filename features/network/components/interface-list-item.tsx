@@ -1,8 +1,13 @@
 import type { InterfaceStatus } from "@/shared/types/network"
 
+const STATE_LABELS: Record<string, string> = {
+  UP: "已连接",
+  DOWN: "未连接",
+  UNKNOWN: "未知",
+}
+
 export function InterfaceListItem({ name, state, ipv4 }: InterfaceStatus) {
-  const stateLabel =
-    state === "UP" ? "已连接" : state === "DOWN" ? "未连接" : "未知"
+  const stateLabel = STATE_LABELS[state] ?? "未知"
 
   return (
     <div className="flex items-center justify-between py-2.5">

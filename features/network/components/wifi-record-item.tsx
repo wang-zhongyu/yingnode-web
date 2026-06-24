@@ -19,8 +19,6 @@ export function WiFiRecordItem({ record, onDeleted }: WiFiRecordItemProps) {
     try {
       const res = await fetch(`/api/network/wifi-records/${record.id}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ssid: record.ssid }),
       })
       if (!res.ok) {
         const data = await res.json()
