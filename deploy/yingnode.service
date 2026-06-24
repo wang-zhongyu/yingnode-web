@@ -6,8 +6,8 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/yingnode
-ExecStart=/usr/bin/node /opt/yingnode/.next/standalone/server.js
+WorkingDirectory=/opt/yingnode/.next/standalone
+ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production

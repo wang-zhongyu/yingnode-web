@@ -5,4 +5,4 @@ set -e
 npx prisma db push --skip-generate
 
 # Start the Next.js server
-exec node .next/standalone/server.js
+exec node server.js
