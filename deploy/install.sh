@@ -81,9 +81,9 @@ deploy_app() {
     log "生成 Prisma Client..."
     npx prisma generate
 
-    log "运行数据库迁移..."
+    log "同步数据库结构..."
     mkdir -p /data
-    npx prisma migrate deploy
+    npx prisma db push
 
     log "构建应用..."
     npm run build
