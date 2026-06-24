@@ -2,14 +2,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-
-export interface ProcessInfo {
-  pid: number
-  name: string
-  cpu: number
-  mem: number
-  user: string
-}
+import type { ProcessInfo } from "@/shared/types/monitoring"
 
 interface UseProcessesResult {
   processes: ProcessInfo[]

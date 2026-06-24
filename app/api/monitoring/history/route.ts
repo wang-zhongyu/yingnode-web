@@ -1,14 +1,14 @@
 // app/api/monitoring/history/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/shared/lib/prisma"
+import { historyQuerySchema } from "@/features/monitoring/schemas/monitoring.schema"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const minutes = Math.min(
-      Math.max(parseInt(searchParams.get("minutes") ?? "60", 10), 1),
-      1440,
-    )
+    const { minutes } = historyQuerySchema.parse({
+      minutes: searchParams.get("minutes"),
+    })
 
     const since = new Date(Date.now() - minutes * 60 * 1000)
 

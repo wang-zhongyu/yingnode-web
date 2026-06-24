@@ -1,6 +1,7 @@
 "use client"
 
-import { useProcesses, type ProcessInfo } from "../hooks/use-processes"
+import { useProcesses } from "../hooks/use-processes"
+import type { ProcessInfo } from "@/shared/types/monitoring"
 import {
   Table,
   TableHeader,

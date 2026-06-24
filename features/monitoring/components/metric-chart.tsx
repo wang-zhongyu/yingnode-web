@@ -43,12 +43,14 @@ export function MetricChart({
     return (
       <Card>
         <CardHeader>{label}</CardHeader>
-        <CardContent className="flex items-center justify-center py-12">
-          <ListEmpty
-            icon={ChartNoAxesColumn}
-            title="暂无数据"
-            description="采集开始后将显示历史趋势"
-          />
+        <CardContent>
+          <div className="flex items-center justify-center py-12">
+            <ListEmpty
+              icon={ChartNoAxesColumn}
+              title="暂无数据"
+              description="采集开始后将显示历史趋势"
+            />
+          </div>
         </CardContent>
       </Card>
     )

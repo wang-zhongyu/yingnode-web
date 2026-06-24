@@ -32,3 +32,11 @@ export interface SystemMetrics {
   temp: TempInfo
   uptime: UptimeInfo
 }
+
+export interface ProcessInfo {
+  pid: number
+  name: string
+  cpu: number
+  mem: number
+  user: string
+}

@@ -79,7 +79,7 @@ export function MetricCard({
       </CardContent>
       {usage !== undefined ? (
         <CardFooter>
-          <Progress value={usage} />
+          <Progress value={Math.min(100, Math.max(0, usage))} />
         </CardFooter>
       ) : null}
     </Card>

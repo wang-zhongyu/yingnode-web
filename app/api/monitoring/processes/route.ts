@@ -2,28 +2,23 @@
 import { NextRequest, NextResponse } from "next/server"
 import { exec } from "child_process"
 import { promisify } from "util"
+import { processesQuerySchema } from "@/features/monitoring/schemas/monitoring.schema"
+import type { ProcessInfo } from "@/shared/types/monitoring"
 
 const execAsync = promisify(exec)
-
-interface ProcessInfo {
-  pid: number
-  name: string
-  cpu: number
-  mem: number
-  user: string
-}
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const sort = searchParams.get("sort") === "mem" ? "-%mem" : "-%cpu"
-    const limit = Math.min(
-      Math.max(parseInt(searchParams.get("limit") ?? "50", 10), 1),
-      100,
-    )
+    const { sort, limit } = processesQuerySchema.parse({
+      sort: searchParams.get("sort"),
+      limit: searchParams.get("limit"),
+    })
+
+    const sortFlag = sort === "mem" ? "-%mem" : "-%cpu"
 
     const { stdout } = await execAsync(
-      `ps aux --sort=${sort} --no-headers | head -n ${limit}`,
+      `ps aux --sort=${sortFlag} --no-headers | head -n ${limit}`,
       { timeout: 5000 },
     )
 

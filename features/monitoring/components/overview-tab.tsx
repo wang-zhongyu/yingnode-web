@@ -57,7 +57,7 @@ export function OverviewTab() {
         icon={Thermometer}
         label="CPU 温度"
         primaryValue={`${temp.celsius}°C`}
-        usage={temp.celsius}
+        usage={Math.min(temp.celsius, 100)}
         colorThreshold="temp"
       />
       <MetricCard

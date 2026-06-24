@@ -3,12 +3,15 @@ import { prisma } from "@/shared/lib/prisma"
 import { systemMonitor } from "@/shared/lib/system-monitor"
 
 let collectorStarted = false
+let collecting = false
 
 export function startMetricsCollector(): void {
   if (collectorStarted) return
   collectorStarted = true
 
   async function collect() {
+    if (collecting) return
+    collecting = true
     try {
       const metrics = await systemMonitor.getMetrics()
 
@@ -33,6 +36,8 @@ export function startMetricsCollector(): void {
       })
     } catch (error) {
       console.error("[metrics-collector] error:", error)
+    } finally {
+      collecting = false
     }
   }
 
