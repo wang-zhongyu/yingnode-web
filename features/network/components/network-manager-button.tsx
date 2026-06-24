@@ -1,7 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Popover, PopoverTrigger } from "@/components/ui/popover"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Wifi, WifiOff, Radio, Loader2 } from "lucide-react"
 import { NetworkPopover } from "./network-popover"
 import type { NetworkStatus } from "@/shared/types/network"
@@ -9,15 +18,25 @@ import type { NetworkStatus } from "@/shared/types/network"
 export function NetworkManagerButton() {
   const [status, setStatus] = useState<NetworkStatus | null>(null)
   const [error, setError] = useState(false)
+  const [ipDialogOpen, setIpDialogOpen] = useState(false)
+  const [dialogIp, setDialogIp] = useState("")
+  const prevIpRef = useRef<string | null | undefined>(undefined)
 
   useEffect(() => {
     async function poll() {
       try {
         const res = await fetch("/api/network/status")
         if (!res.ok) throw new Error("Failed")
-        const data = await res.json()
+        const data = (await res.json()) as NetworkStatus
         setStatus(data)
         setError(false)
+
+        const currentIp = data.reachableIp ?? data.ipAddress
+        if (prevIpRef.current !== undefined && currentIp && currentIp !== prevIpRef.current) {
+          setDialogIp(currentIp)
+          setIpDialogOpen(true)
+        }
+        prevIpRef.current = currentIp
       } catch {
         setError(true)
       }
@@ -26,6 +45,9 @@ export function NetworkManagerButton() {
     const interval = setInterval(poll, 10_000)
     return () => clearInterval(interval)
   }, [])
+
+  const port = typeof window !== "undefined" ? window.location.port : "3000"
+  const accessUrl = port ? `http://${dialogIp}:${port}` : `http://${dialogIp}`
 
   function buttonContent() {
     if (error) {
@@ -67,11 +89,32 @@ export function NetworkManagerButton() {
   }
 
   return (
-    <Popover>
-      <PopoverTrigger className="inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-sm hover:bg-muted">
-        {buttonContent()}
-      </PopoverTrigger>
-      <NetworkPopover />
-    </Popover>
+    <>
+      <Popover>
+        <PopoverTrigger className="inline-flex items-center gap-2 rounded-md px-2.5 py-1 text-sm hover:bg-muted">
+          {buttonContent()}
+        </PopoverTrigger>
+        <NetworkPopover />
+      </Popover>
+
+      <AlertDialog open={ipDialogOpen} onOpenChange={setIpDialogOpen}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>网络地址已变更</AlertDialogTitle>
+            <AlertDialogDescription>
+              设备 IP 已更新，请在浏览器中访问以下地址：
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2 text-center">
+            <span className="text-lg font-mono font-semibold tracking-wide select-all">
+              {accessUrl}
+            </span>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogAction variant="default">知道了</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
