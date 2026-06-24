@@ -8,7 +8,7 @@ const DNS_TEST_DOMAIN = "google.com"
 
 class NetworkService {
   private staticIpEnsured = false
-  private configCache: { wifiInterface: string; hotspotIp: string; hotspotSsid: string } | null = null
+  private configCache: Awaited<ReturnType<typeof getDeviceConfig>> | null = null
 
   /** Read device config from DB, with env-var fallback. Cached after first read. */
   async getConfig() {
@@ -23,6 +23,53 @@ class NetworkService {
   clearConfigCache(): void {
     this.configCache = null
     this.staticIpEnsured = false
+  }
+
+  /** Check and correct WiFi interface state before network operations.
+   *  1. Bring interface UP if down
+   *  2. Switch from Monitor to Managed mode (hostapd + nl80211 can go AP from managed, not monitor)
+   *  3. Tell NetworkManager to unmanage the interface if NM is running
+   *  Returns false only if the interface is missing entirely. */
+  async ensureInterfaceReady(): Promise<{ ok: boolean; reason?: string }> {
+    const { wifiInterface } = await this.getConfig()
+
+    // 1. Check interface exists and is UP
+    try {
+      const { stdout: upOutput } = await execAsync(`ip link show ${wifiInterface}`)
+      if (!upOutput.includes(wifiInterface)) {
+        return { ok: false, reason: `Interface ${wifiInterface} not found` }
+      }
+      if (upOutput.includes("state DOWN")) {
+        await execAsync(`sudo ip link set ${wifiInterface} up`)
+        console.log(`[network] Brought ${wifiInterface} UP`)
+      }
+    } catch {
+      return { ok: false, reason: `Cannot read state of ${wifiInterface}` }
+    }
+
+    // 2. Check wireless mode — must not be Monitor
+    try {
+      const { stdout: modeOutput } = await execAsync(`iwconfig ${wifiInterface} 2>/dev/null`)
+      if (modeOutput.includes("Mode:Monitor")) {
+        await execAsync(`sudo iwconfig ${wifiInterface} mode managed`)
+        console.log(`[network] Switched ${wifiInterface} from Monitor to Managed`)
+      }
+    } catch {
+      // iwconfig may fail on non-wireless interfaces — non-fatal
+    }
+
+    // 3. Check for NetworkManager interference
+    try {
+      await execAsync("systemctl is-active --quiet NetworkManager")
+      await execAsync(
+        `sudo nmcli device set ${wifiInterface} managed no 2>/dev/null || true`,
+      )
+      console.log(`[network] Told NetworkManager to unmanage ${wifiInterface}`)
+    } catch {
+      // NetworkManager not running — ok
+    }
+
+    return { ok: true }
   }
 
   /** Ensure the fixed IP is always bound to the interface as secondary.
@@ -106,13 +153,54 @@ class NetworkService {
     const existingStatus = await this.getStatus()
     if (existingStatus.hotspotActive) return
 
+    // Ensure interface is ready before starting hostapd
+    const ready = await this.ensureInterfaceReady()
+    if (!ready.ok) {
+      console.error(`[network] Cannot start hotspot: ${ready.reason}`)
+      return
+    }
+
     this.staticIpEnsured = false
     await this.ensureStaticIp()
 
-    await execAsync(`sudo hostapd -B /etc/hostapd/hostapd.conf`)
-    await execAsync(`sudo dnsmasq -C /etc/dnsmasq.conf`)
+    const { wifiInterface, hotspotSsid, hotspotPassword } = await this.getConfig()
 
-    await this.updateDB({ status: "HOTSPOT_ACTIVE", hotspotActive: true })
+    // Generate dynamic hostapd config
+    let configLines = [
+      `interface=${wifiInterface}`,
+      "driver=nl80211",
+      `ssid=${hotspotSsid}`,
+      "hw_mode=g",
+      "channel=6",
+      "wmm_enabled=0",
+      "macaddr_acl=0",
+      "auth_algs=1",
+      "ignore_broadcast_ssid=0",
+    ]
+
+    if (hotspotPassword) {
+      configLines.push(
+        "wpa=2",
+        `wpa_passphrase=${hotspotPassword}`,
+        "wpa_key_mgmt=WPA-PSK",
+        "wpa_pairwise=TKIP",
+        "rsn_pairwise=CCMP",
+      )
+    }
+
+    const configPath = "/tmp/hostapd-yingnode.conf"
+    const fs = await import("fs/promises")
+    await fs.writeFile(configPath, configLines.join("\n") + "\n")
+
+    try {
+      await execAsync(`sudo hostapd -B ${configPath}`)
+      await execAsync("sudo dnsmasq -C /etc/dnsmasq.conf")
+      await this.updateDB({ status: "HOTSPOT_ACTIVE", hotspotActive: true })
+    } catch (err) {
+      console.error("[network] Failed to start hotspot:", err)
+      // Don't set HOTSPOT_ACTIVE if hostapd failed
+      try { await fs.unlink(configPath) } catch { /* best-effort cleanup */ }
+    }
   }
 
   async stopHotspot(): Promise<void> {
@@ -121,6 +209,12 @@ class NetworkService {
 
     try { await execAsync("sudo killall hostapd") } catch { /* not running */ }
     try { await execAsync("sudo killall dnsmasq") } catch { /* not running */ }
+
+    // Clean up temp config
+    try {
+      const fs = await import("fs/promises")
+      await fs.unlink("/tmp/hostapd-yingnode.conf")
+    } catch { /* already cleaned */ }
 
     // Keep static IP on interface so the device remains reachable
     this.staticIpEnsured = false
@@ -268,12 +362,23 @@ class NetworkService {
     const { wifiInterface } = await this.getConfig()
     const escapedIface = escapeShellArg(wifiInterface)
 
+    // Check if this is the currently-connected SSID
+    const status = await this.getStatus()
+    const isCurrentConnection = status.currentSSID === record.ssid
+
     try {
       const networkId = await this.getWpaNetworkId(record.ssid, wifiInterface)
       if (networkId !== null) {
         await execAsync(
           `wpa_cli -i ${escapedIface} remove_network ${networkId}`,
         )
+        // If this was the active connection, disconnect so the monitor
+        // detects offline and starts the hotspot within ~10s
+        if (isCurrentConnection) {
+          try {
+            await execAsync(`wpa_cli -i ${escapedIface} disconnect`)
+          } catch { /* interface may already be down */ }
+        }
         await execAsync(`wpa_cli -i ${escapedIface} save_config`)
       }
     } catch (err) {
