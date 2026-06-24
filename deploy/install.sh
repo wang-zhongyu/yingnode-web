@@ -7,9 +7,48 @@ set -euo pipefail
 # ============================================================
 
 REPO="https://github.com/wang-zhongyu/yingnode-web.git"
+REPO_MIRROR="https://gitee.com/wang-zhongyu/yingnode-web.git"
 INSTALL_DIR="/opt/yingnode"
 NODE_VERSION="22"
 SERVICE_NAME="yingnode"
+
+# ---- 工具函数 ----
+# 带重试和镜像回退的下载
+download() {
+    local url="$1"
+    local output="$2"
+    local mirror_url="$3"
+
+    # 尝试原始 URL
+    if curl -fsSL --connect-timeout 10 --retry 2 "$url" -o "$output" 2>/dev/null; then
+        return 0
+    fi
+
+    # 回退到镜像
+    if [ -n "$mirror_url" ]; then
+        warn "主源连接失败，尝试镜像..."
+        if curl -fsSL --connect-timeout 15 --retry 3 "$mirror_url" -o "$output" 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# 克隆仓库（GitHub 优先，gitee 镜像回退）
+clone_repo() {
+    if git clone --depth 1 "$REPO" "$INSTALL_DIR" 2>/dev/null; then
+        return 0
+    fi
+    warn "GitHub 克隆失败，尝试 Gitee 镜像..."
+    if git clone --depth 1 "$REPO_MIRROR" "$INSTALL_DIR" 2>/dev/null; then
+        # 切换 remote 回 GitHub
+        cd "$INSTALL_DIR"
+        git remote set-url origin "$REPO"
+        return 0
+    fi
+    err "无法克隆仓库，请检查网络连接"
+}
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -38,8 +77,17 @@ install_node() {
     fi
 
     log "安装 Node.js ${NODE_VERSION}..."
-    curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash -
-    apt-get install -y nodejs
+    # nodesource 国内可能慢，使用 npmmirror 的 Node.js 二进制镜像
+    if ! curl -fsSL --connect-timeout 10 "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - 2>/dev/null; then
+        warn "nodesource 不可用，尝试 n 版本管理器..."
+        npm install -g n 2>/dev/null || true
+        if command -v n &>/dev/null; then
+            N_NODE_MIRROR=https://npmmirror.com/dist/node/ n "$NODE_VERSION"
+        else
+            err "无法安装 Node.js"
+        fi
+    fi
+    apt-get install -y nodejs 2>/dev/null || true
     log "Node.js $(node -v) 安装完成"
 }
 
@@ -67,12 +115,18 @@ deploy_app() {
     if [ -d "$INSTALL_DIR/.git" ]; then
         log "更新已有仓库..."
         cd "$INSTALL_DIR"
-        git pull origin main
+        git pull origin main 2>/dev/null || warn "更新失败，继续使用当前版本"
     else
         log "克隆仓库..."
         rm -rf "$INSTALL_DIR"
-        git clone "$REPO" "$INSTALL_DIR"
+        clone_repo
         cd "$INSTALL_DIR"
+    fi
+
+    # 设置 npm 镜像（国内加速）
+    if [ -n "${NPM_MIRROR:-}" ]; then
+        npm config set registry "$NPM_MIRROR"
+        log "npm 镜像: $NPM_MIRROR"
     fi
 
     log "安装依赖..."
@@ -159,7 +213,12 @@ install_service() {
                 armv7l)  TTYD_ARCH="armv7" ;;
                 *)       err "不支持的架构: $ARCH" ;;
             esac
-            curl -fsSL "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.${TTYD_ARCH}" -o /usr/local/bin/ttyd
+            TTYD_URL="https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.${TTYD_ARCH}"
+            TTYD_MIRROR="https://fastly.jsdelivr.net/gh/tsl0922/ttyd@latest/ttyd.${TTYD_ARCH}"
+            if ! download "$TTYD_URL" /usr/local/bin/ttyd "$TTYD_MIRROR"; then
+                warn "ttyd 下载失败，跳过终端服务"
+                return
+            fi
             chmod +x /usr/local/bin/ttyd
             log "ttyd 安装完成"
         fi
