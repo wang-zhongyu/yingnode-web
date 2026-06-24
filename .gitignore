@@ -45,6 +45,11 @@ next-env.d.ts
 # docs (design specs are internal)
 /docs
 
+# internal agent configs (not for GitHub)
+.agents/
+CLAUDE.md
+AGENTS.md
+
 # database files
 /dev.db
 /dev.db-journal
