@@ -16,6 +16,23 @@ model NetworkStatus {
   ipAddress     String?
 }
 
+model MetricsSnapshot {
+  id          Int      @id @default(autoincrement())
+  timestamp   DateTime @default(now())
+
+  cpuUsage    Int
+
+  memTotal    BigInt
+  memUsed     BigInt
+
+  diskTotal   BigInt
+  diskUsed    BigInt
+
+  tempCelsius Int
+
+  @@index([timestamp])
+}
+
 model DeviceConfig {
   id            Int    @id @default(1)
   wifiInterface String @default("wlan0")
