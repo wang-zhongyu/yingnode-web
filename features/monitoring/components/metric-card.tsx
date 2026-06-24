@@ -2,12 +2,14 @@ import type { LucideIcon } from "lucide-react"
 import {
   Card,
   CardHeader,
+  CardTitle,
+  CardDescription,
+  CardAction,
   CardContent,
   CardFooter,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { cn } from "@/lib/utils"
 
 interface MetricCardProps {
   icon: LucideIcon
@@ -30,10 +32,7 @@ function getStatusVariant(
   return "default"
 }
 
-function getStatusLabel(
-  value: number,
-  threshold: "temp" | "usage",
-): string {
+function getStatusLabel(value: number, threshold: "temp" | "usage"): string {
   const red = threshold === "temp" ? 70 : 80
   const yellow = threshold === "temp" ? 50 : 50
 
@@ -63,19 +62,23 @@ export function MetricCard({
   return (
     <Card>
       <CardHeader>
-        <Icon />
-        <span>{label}</span>
-        {statusLabel ? <Badge variant={statusVariant}>{statusLabel}</Badge> : null}
+        <div className="flex items-center gap-2">
+          <Icon />
+          <CardTitle>{label}</CardTitle>
+        </div>
+        {secondaryValue ? (
+          <CardDescription>{secondaryValue}</CardDescription>
+        ) : null}
+        {statusLabel ? (
+          <CardAction>
+            <Badge variant={statusVariant}>{statusLabel}</Badge>
+          </CardAction>
+        ) : null}
       </CardHeader>
       <CardContent>
         <span className="text-2xl font-semibold font-heading">
           {primaryValue}
         </span>
-        {secondaryValue ? (
-          <span className="text-xs text-muted-foreground">
-            {secondaryValue}
-          </span>
-        ) : null}
       </CardContent>
       {usage !== undefined ? (
         <CardFooter>
