@@ -18,6 +18,12 @@ class NetworkService {
   private staticIpEnsured = false
   private configCache: { wifiInterface: string; hotspotIp: string; hotspotSsid: string } | null = null
 
+  /** Escape a value for safe interpolation inside single-quoted shell strings.
+   *  Replaces each ' with '\'' (end quote, escaped quote, resume quote). */
+  private escapeShellArg(arg: string): string {
+    return arg.replace(/'/g, "'\\''")
+  }
+
   /** Read device config from DB, with env-var fallback. Cached after first read. */
   async getConfig() {
     if (!this.configCache) {
@@ -180,10 +186,12 @@ class NetworkService {
       const { stdout: linkOut } = await execAsync("ip -o link show")
       const stateMap = new Map<string, string>()
       for (const line of linkOut.split("\n")) {
-        const m = line.match(/^\d+:\s+(\S+):\s+<.*?(UP|DOWN)/)
+        const m = line.match(/^\d+:\s+(\S+):\s+/)
         if (!m) continue
         const iface = m[1].includes("@") ? m[1].split("@")[0] : m[1]
-        stateMap.set(iface, m[2].startsWith("UP") ? "UP" : "DOWN")
+        const stateMatch = line.match(/ state (UP|DOWN|UNKNOWN) /)
+        const state = stateMatch ? stateMatch[1] : "UNKNOWN"
+        stateMap.set(iface, state)
       }
 
       const { stdout: addrOut } = await execAsync("ip -o -4 addr show")
@@ -204,7 +212,7 @@ class NetworkService {
         if (name === "lo") continue
         result.push({
           name,
-          state: state as "UP" | "DOWN",
+          state: state as "UP" | "DOWN" | "UNKNOWN",
           ipv4: ipMap.get(name),
         })
       }
@@ -268,8 +276,8 @@ class NetworkService {
         await execAsync(`wpa_cli -i ${wifiInterface} remove_network ${networkId}`)
         await execAsync(`wpa_cli -i ${wifiInterface} save_config`)
       }
-    } catch {
-      // Non-fatal — still remove from DB even if wpa_cli fails
+    } catch (err) {
+      console.warn(`[network] Failed to remove wpa_cli network for "${ssid}":`, err)
     }
 
     await prisma.wiFiRecord.delete({ where: { id } })
@@ -302,20 +310,36 @@ class NetworkService {
 
   async connectWiFi(ssid: string, password?: string, security?: string): Promise<ConnectResult> {
     const { wifiInterface } = await this.getConfig()
+    const escapedSSID = this.escapeShellArg(ssid)
 
     try {
-      if (password) {
-        await execAsync(`wpa_cli -i ${wifiInterface} add_network`)
-        await execAsync(`wpa_cli -i ${wifiInterface} set_network 0 ssid '"${ssid}"'`)
-        await execAsync(`wpa_cli -i ${wifiInterface} set_network 0 psk '"${password}"'`)
-        await execAsync(`wpa_cli -i ${wifiInterface} enable_network 0`)
-      } else {
-        await execAsync(`wpa_cli -i ${wifiInterface} add_network`)
-        await execAsync(`wpa_cli -i ${wifiInterface} set_network 0 ssid '"${ssid}"'`)
-        await execAsync(`wpa_cli -i ${wifiInterface} set_network 0 key_mgmt NONE`)
-        await execAsync(`wpa_cli -i ${wifiInterface} enable_network 0`)
+      // Capture the network ID returned by add_network
+      const { stdout: addOut } = await execAsync(
+        `wpa_cli -i ${wifiInterface} add_network`,
+      )
+      const networkId = parseInt(addOut.trim(), 10)
+      if (isNaN(networkId)) {
+        return { success: false, ssid: null, ipAddress: null, error: "无法创建网络配置" }
       }
 
+      if (password) {
+        const escapedPwd = this.escapeShellArg(password)
+        await execAsync(
+          `wpa_cli -i ${wifiInterface} set_network ${networkId} ssid '"${escapedSSID}"'`,
+        )
+        await execAsync(
+          `wpa_cli -i ${wifiInterface} set_network ${networkId} psk '"${escapedPwd}"'`,
+        )
+      } else {
+        await execAsync(
+          `wpa_cli -i ${wifiInterface} set_network ${networkId} ssid '"${escapedSSID}"'`,
+        )
+        await execAsync(
+          `wpa_cli -i ${wifiInterface} set_network ${networkId} key_mgmt NONE`,
+        )
+      }
+
+      await execAsync(`wpa_cli -i ${wifiInterface} enable_network ${networkId}`)
       await execAsync(`wpa_cli -i ${wifiInterface} save_config`)
       await execAsync(`wpa_cli -i ${wifiInterface} reconfigure`)
 

@@ -15,7 +15,14 @@ export async function DELETE(
         { status: 400 },
       )
     }
-    await networkService.forgetWiFi(parseInt(id, 10), ssid)
+    const numericId = parseInt(id, 10)
+    if (!Number.isFinite(numericId)) {
+      return NextResponse.json(
+        { error: "invalid id" },
+        { status: 400 },
+      )
+    }
+    await networkService.forgetWiFi(numericId, ssid)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("[network/wifi-records] delete error:", error)
