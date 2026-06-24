@@ -98,6 +98,7 @@ export function DeviceConfigForm({ config }: Props) {
                   size="icon-sm"
                   className="absolute right-1 top-1/2 -translate-y-1/2"
                   onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "隐藏密码" : "显示密码"}
                 >
                   {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </Button>
