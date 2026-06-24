@@ -41,7 +41,9 @@ export function UserDropdown() {
           )}
         />
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel>账户</DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>账户</DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuGroup>
             <DropdownMenuItem className="text-muted-foreground text-xs">
               {email}
