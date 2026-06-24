@@ -93,6 +93,7 @@ DATABASE_URL="file:/data/yingnode.db"
 WIFI_INTERFACE="wlan0"
 HOTSPOT_SSID="yingnode"
 HOTSPOT_IP="172.16.42.1"
+HOTSPOT_PASSWORD="$(openssl rand -base64 9 | tr -d '=+/' | cut -c1-12)"
 BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
 TERMINAL_TOKEN="$(openssl rand -base64 16)"
 EOF
@@ -127,8 +128,7 @@ sudo useradd -r -s /usr/sbin/nologin -M yingnode
 sudo cp /opt/yingnode/config/sudoers.d/yingnode /etc/sudoers.d/yingnode
 sudo chmod 440 /etc/sudoers.d/yingnode
 
-# hostapd / dnsmasq 配置
-sudo cp -n /opt/yingnode/config/hostapd.conf /etc/hostapd/hostapd.conf
+# dnsmasq 配置（hostapd 配置由应用动态生成）
 sudo cp -n /opt/yingnode/config/dnsmasq.conf /etc/dnsmasq.conf
 ```
 
@@ -195,7 +195,6 @@ yingnode-web/
 │   └── yingnode-terminal.service  # ttyd 终端服务
 └── config/                 # 系统配置文件
     ├── sudoers.d/          # sudo 权限
-    ├── hostapd.conf        # Wi-Fi 热点配置
     └── dnsmasq.conf        # DNS/DHCP 配置
 ```
 
