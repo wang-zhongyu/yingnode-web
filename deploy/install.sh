@@ -190,6 +190,7 @@ configure_env() {
     HOTSPOT_PASSWORD="$(openssl rand -base64 9 | tr -d '=+/' | cut -c1-12)"
 
     log "创建 .env 配置..."
+    mkdir -p "$INSTALL_DIR"
     cat > "$INSTALL_DIR/.env" <<EOF
 DATABASE_URL="file:/data/yingnode.db"
 WIFI_INTERFACE="wlan0"
