@@ -1,4 +1,4 @@
-import { getDeviceConfig } from "@/features/settings/lib/device-config"
+import { getDeviceConfig } from "@/shared/lib/device-config"
 import { DeviceConfigForm } from "@/features/settings/components/device-config-form"
 import { UpdatePanel } from "@/features/settings/components/update-panel"
 

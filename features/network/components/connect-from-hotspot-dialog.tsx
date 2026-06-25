@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -12,50 +11,30 @@ import {
 import { Button } from "@/components/ui/button"
 import { useModalStore } from "@/shared/stores/use-modal-store"
 import { ManualAddFormFields } from "./manual-add-form-fields"
+import type { ManualAddInput } from "../schemas/network.schema"
+import { useAction } from "next-safe-action/hooks"
+import { connectFromHotspotAction } from "@/actions/network.actions"
 import { toast } from "sonner"
 import { AlertTriangle } from "lucide-react"
 
 export function ConnectFromHotspotDialog() {
   const { type, isOpen, close } = useModalStore()
-  const [connecting, setConnecting] = useState(false)
+
+  const { execute, isPending } = useAction(connectFromHotspotAction, {
+    onSuccess({ data }) {
+      if (!data) return
+      toast.success(`已连接到 "${data.ssid}"`)
+      close()
+    },
+    onError({ error }) {
+      toast.error(error.serverError ?? "连接失败，请重试")
+    },
+  })
 
   if (type !== "connectFromHotspot") return null
 
-  async function handleConnect(ssid: string, password: string, security: string) {
-    setConnecting(true)
-    try {
-      const res = await fetch("/api/network/connect-from-hotspot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ssid, password, security }),
-      })
-
-      const result = await res.json()
-      if (!result.success) {
-        toast.error(result.error ?? "连接失败")
-        return
-      }
-
-      toast.success(`已连接到 "${ssid}"`)
-      close()
-    } catch (err) {
-      // Distinguish network failure (hotspot stopped → connection lost)
-      // from JSON parse failure (server returned non-JSON)
-      if (err instanceof TypeError) {
-        // Network error: the hotspot was stopped mid-request.
-        // The server may have succeeded (device now on external WiFi)
-        // or failed (hotspot restarted). We can't tell which.
-        toast.error("热点已关闭", {
-          description:
-            "如果连接成功，设备已接入外部 Wi-Fi，可通过固定 IP 访问面板。如果连接失败，热点将自动恢复，请重新连接热点。",
-          duration: 8000,
-        })
-      } else {
-        toast.error("连接失败，请重试")
-      }
-    } finally {
-      setConnecting(false)
-    }
+  function handleConnect(ssid: string, password: string, security: ManualAddInput["security"]) {
+    execute({ ssid, password, security })
   }
 
   return (
@@ -77,16 +56,16 @@ export function ConnectFromHotspotDialog() {
 
         <ManualAddFormFields
           initialSSID=""
-          connecting={connecting}
+          connecting={isPending}
           onConnect={handleConnect}
         />
 
         <DialogFooter>
-          <Button variant="outline" onClick={close} disabled={connecting}>
+          <Button variant="outline" onClick={close} disabled={isPending}>
             取消
           </Button>
-          <Button form="manual-add-form" type="submit" disabled={connecting}>
-            {connecting ? "连接中..." : "连接并关闭热点"}
+          <Button form="manual-add-form" type="submit" disabled={isPending}>
+            {isPending ? "连接中..." : "连接并关闭热点"}
           </Button>
         </DialogFooter>
       </DialogContent>

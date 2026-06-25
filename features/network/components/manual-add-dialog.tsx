@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   Dialog,
@@ -13,36 +12,31 @@ import {
 import { Button } from "@/components/ui/button"
 import { useModalStore } from "@/shared/stores/use-modal-store"
 import { ManualAddFormFields } from "./manual-add-form-fields"
+import type { ManualAddInput } from "../schemas/network.schema"
+import { useAction } from "next-safe-action/hooks"
+import { connectWiFiAction } from "@/actions/network.actions"
 import { toast } from "sonner"
 
 export function ManualAddDialog() {
   const { type, isOpen, close, data } = useModalStore()
-  const [connecting, setConnecting] = useState(false)
   const router = useRouter()
+
+  const { execute, isPending } = useAction(connectWiFiAction, {
+    onSuccess({ data: result }) {
+      if (!result) return
+      toast.success(`已连接到 "${result.ssid}"`)
+      close()
+      router.refresh()
+    },
+    onError({ error }) {
+      toast.error(error.serverError ?? "连接失败")
+    },
+  })
 
   if (type !== "manualAddNetwork") return null
 
-  async function handleConnect(ssid: string, password: string, security: string) {
-    setConnecting(true)
-    try {
-      const res = await fetch("/api/network/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ssid, password, security }),
-      })
-      const result = await res.json()
-      if (!result.success) {
-        toast.error(result.error ?? "连接失败")
-        return
-      }
-      toast.success(`已连接到 "${ssid}"`)
-      close()
-      router.refresh()
-    } catch {
-      toast.error("连接失败")
-    } finally {
-      setConnecting(false)
-    }
+  function handleConnect(ssid: string, password: string, security: ManualAddInput["security"]) {
+    execute({ ssid, password, security })
   }
 
   return (
@@ -54,15 +48,15 @@ export function ManualAddDialog() {
         </DialogHeader>
         <ManualAddFormFields
           initialSSID={data.ssid ?? ""}
-          connecting={connecting}
+          connecting={isPending}
           onConnect={handleConnect}
         />
         <DialogFooter>
-          <Button variant="outline" onClick={close} disabled={connecting}>
+          <Button variant="outline" onClick={close} disabled={isPending}>
             取消
           </Button>
-          <Button form="manual-add-form" type="submit" disabled={connecting}>
-            {connecting ? "连接中..." : "连接"}
+          <Button form="manual-add-form" type="submit" disabled={isPending}>
+            {isPending ? "连接中..." : "连接"}
           </Button>
         </DialogFooter>
       </DialogContent>

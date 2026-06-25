@@ -150,6 +150,7 @@ deploy_app() {
 
     log "同步数据库结构..."
     mkdir -p /data
+    warn "重置数据库以清除残留认证数据（生产环境请备份后手动迁移）"
     rm -f /data/yingnode.db /data/yingnode.db-journal
     npx prisma db push
 }

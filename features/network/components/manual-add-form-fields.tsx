@@ -20,7 +20,7 @@ import {
 interface ManualAddFormFieldsProps {
   initialSSID: string
   connecting: boolean
-  onConnect: (ssid: string, password: string, security: string) => void
+  onConnect: (ssid: string, password: string, security: ManualAddInput["security"]) => void
 }
 
 export function ManualAddFormFields({

@@ -1,5 +1,5 @@
 import { prisma } from "@/shared/lib/prisma"
-import { getDeviceConfig } from "@/features/settings/lib/device-config"
+import { getDeviceConfig } from "@/shared/lib/device-config"
 import { execAsync, escapeShellArg } from "@/shared/lib/shell"
 import type { NetworkStatus, WiFiNetwork, ConnectResult } from "@/shared/types/network"
 
