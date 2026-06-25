@@ -163,7 +163,12 @@ class NetworkService {
     this.staticIpEnsured = false
     await this.ensureStaticIp()
 
-    const { wifiInterface, hotspotSsid, hotspotPassword } = await this.getConfig()
+    const { wifiInterface, hotspotSsid, hotspotPassword, hotspotIp } =
+      await this.getConfig()
+
+    // Derive subnet from hotspot IP for DHCP range
+    // e.g. 172.16.42.1 → subnet=172.16.42, range=172.16.42.10-172.16.42.50
+    const subnet = hotspotIp.split(".").slice(0, 3).join(".")
 
     // Generate dynamic hostapd config
     let configLines = [
@@ -188,18 +193,33 @@ class NetworkService {
       )
     }
 
+    // Generate dynamic dnsmasq config (was previously static /etc/dnsmasq.conf)
+    const dnsmasqLines = [
+      `interface=${wifiInterface}`,
+      `dhcp-range=${subnet}.10,${subnet}.50,255.255.255.0,12h`,
+      `dhcp-option=3,${hotspotIp}`,
+      `dhcp-option=6,${hotspotIp}`,
+      "no-resolv",
+      `address=/#/${hotspotIp}`,
+    ]
+
     const configPath = "/tmp/hostapd-yingnode.conf"
+    const dnsmasqConfigPath = "/tmp/dnsmasq-yingnode.conf"
     const fs = await import("fs/promises")
     await fs.writeFile(configPath, configLines.join("\n") + "\n")
+    await fs.writeFile(dnsmasqConfigPath, dnsmasqLines.join("\n") + "\n")
 
     try {
       await execAsync(`sudo hostapd -B ${configPath}`)
-      await execAsync("sudo dnsmasq -C /etc/dnsmasq.conf")
+      // Brief delay so the AP interface is ready before dnsmasq binds
+      await new Promise((r) => setTimeout(r, 1500))
+      await execAsync(`sudo dnsmasq -C ${dnsmasqConfigPath}`)
       await this.updateDB({ status: "HOTSPOT_ACTIVE", hotspotActive: true })
     } catch (err) {
       console.error("[network] Failed to start hotspot:", err)
-      // Don't set HOTSPOT_ACTIVE if hostapd failed
+      // Don't set HOTSPOT_ACTIVE if hostapd/dnsmasq failed
       try { await fs.unlink(configPath) } catch { /* best-effort cleanup */ }
+      try { await fs.unlink(dnsmasqConfigPath) } catch { /* best-effort cleanup */ }
     }
   }
 
@@ -210,10 +230,11 @@ class NetworkService {
     try { await execAsync("sudo killall hostapd") } catch { /* not running */ }
     try { await execAsync("sudo killall dnsmasq") } catch { /* not running */ }
 
-    // Clean up temp config
+    // Clean up temp configs
     try {
       const fs = await import("fs/promises")
       await fs.unlink("/tmp/hostapd-yingnode.conf")
+      await fs.unlink("/tmp/dnsmasq-yingnode.conf")
     } catch { /* already cleaned */ }
 
     // Keep static IP on interface so the device remains reachable
