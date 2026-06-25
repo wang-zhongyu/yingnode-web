@@ -134,42 +134,24 @@ check_installed() {
 }
 
 # ---- 工具函数 ----
-# 带重试和镜像回退的下载
+# 下载文件（带超时和重试）
 download() {
     local url="$1"
     local output="$2"
-    local mirror_url="$3"
 
-    # 尝试原始 URL
     if curl -fsSL --connect-timeout 10 --retry 2 "$url" -o "$output" 2>/dev/null; then
         return 0
     fi
-
-    # 回退到镜像
-    if [ -n "$mirror_url" ]; then
-        warn "主源连接失败，尝试镜像..."
-        if curl -fsSL --connect-timeout 15 --retry 3 "$mirror_url" -o "$output" 2>/dev/null; then
-            return 0
-        fi
-    fi
-
     return 1
 }
 
-# 克隆仓库（GitHub 优先，gitee 镜像回退）
+# 克隆仓库 — 使用选定的源，失败时给出明确指引
 clone_repo() {
+    log "从 $REPO_URL 克隆仓库..."
     if git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" 2>/dev/null; then
         return 0
     fi
-    warn "主源克隆失败，尝试备用源..."
-    local alt_repo="$REPO_GITEE"
-    [ "$REPO_URL" = "$REPO_GITEE" ] && alt_repo="$REPO_GITHUB"
-    if git clone --depth 1 "$alt_repo" "$INSTALL_DIR" 2>/dev/null; then
-        cd "$INSTALL_DIR"
-        git remote set-url origin "$REPO_URL"
-        return 0
-    fi
-    err "无法克隆仓库，请检查网络连接"
+    err "无法克隆仓库。请检查网络连接，或设置 REPO_SOURCE=gitee 使用国内镜像重试"
 }
 
 RED='\033[0;31m'
@@ -204,7 +186,11 @@ install_node() {
         warn "nodesource 不可用，尝试 n 版本管理器..."
         npm install -g n 2>/dev/null || true
         if command -v n &>/dev/null; then
-            N_NODE_MIRROR=https://npmmirror.com/dist/node/ n "$NODE_VERSION"
+            if [ "${NPM_MIRROR_NODE:-false}" = true ]; then
+                N_NODE_MIRROR=https://npmmirror.com/dist/node/ n "$NODE_VERSION"
+            else
+                n "$NODE_VERSION"
+            fi
         else
             err "无法安装 Node.js"
         fi
@@ -234,15 +220,14 @@ create_user() {
 
 # ---- 部署应用 ----
 deploy_app() {
-    if [ -d "$INSTALL_DIR/.git" ]; then
+    if [ "${SKIP_CLONE:-false}" = true ]; then
+        log "跳过代码更新，使用当前代码..."
+        cd "$INSTALL_DIR"
+    elif [ -d "$INSTALL_DIR/.git" ]; then
         log "更新已有仓库..."
         cd "$INSTALL_DIR"
-        # 先获取当前 remote，尝试 pull
-        git pull origin main 2>/dev/null || {
-            warn "GitHub 更新失败，尝试 Gitee 镜像..."
-            git remote add gitee "$REPO_GITEE" 2>/dev/null || true
-            git pull gitee main 2>/dev/null || warn "更新失败，继续使用当前版本"
-        }
+        git pull origin main 2>/dev/null || \
+            warn "更新失败，继续使用当前版本"
     else
         log "克隆仓库..."
         rm -rf "$INSTALL_DIR"
@@ -250,10 +235,10 @@ deploy_app() {
         cd "$INSTALL_DIR"
     fi
 
-    # 设置 npm 镜像（国内加速）
-    if [ -n "${NPM_MIRROR:-}" ]; then
-        npm config set registry "$NPM_MIRROR"
-        log "npm 镜像: $NPM_MIRROR"
+    # 设置 npm 源
+    if [ -n "${NPM_REGISTRY:-}" ]; then
+        npm config set registry "$NPM_REGISTRY"
+        log "npm registry: $NPM_REGISTRY"
     fi
 
     log "安装依赖..."
@@ -262,11 +247,17 @@ deploy_app() {
     log "生成 Prisma Client..."
     npx prisma generate
 
-    log "同步数据库结构..."
-    mkdir -p /data
-    warn "重置数据库以清除残留认证数据（生产环境请备份后手动迁移）"
-    rm -f /data/yingnode.db /data/yingnode.db-journal
-    npx prisma db push
+    if [ "${SKIP_DB_RESET:-false}" = true ]; then
+        log "保留现有数据库..."
+        mkdir -p /data
+        npx prisma db push
+    else
+        log "同步数据库结构..."
+        mkdir -p /data
+        warn "重置数据库以清除残留认证数据（生产环境请备份后手动迁移）"
+        rm -f /data/yingnode.db /data/yingnode.db-journal
+        npx prisma db push
+    fi
 }
 
 # ---- 构建应用 ----
@@ -352,10 +343,13 @@ install_service() {
                 *)       err "不支持的架构: $ARCH" ;;
             esac
             TTYD_URL="https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.${TTYD_ARCH}"
-            TTYD_MIRROR="https://fastly.jsdelivr.net/gh/tsl0922/ttyd@latest/ttyd.${TTYD_ARCH}"
-            if ! download "$TTYD_URL" /usr/local/bin/ttyd "$TTYD_MIRROR"; then
-                warn "ttyd 下载失败，跳过终端服务"
-                return
+            TTYD_CDN="https://fastly.jsdelivr.net/gh/tsl0922/ttyd@latest/ttyd.${TTYD_ARCH}"
+            if ! download "$TTYD_URL" /usr/local/bin/ttyd; then
+                warn "GitHub 下载失败，尝试 CDN 镜像..."
+                if ! download "$TTYD_CDN" /usr/local/bin/ttyd; then
+                    warn "ttyd 下载失败，跳过终端服务"
+                    return
+                fi
             fi
             chmod +x /usr/local/bin/ttyd
             log "ttyd 安装完成"
