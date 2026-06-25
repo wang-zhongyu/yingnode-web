@@ -196,11 +196,14 @@ class NetworkService {
     // Generate dynamic dnsmasq config (was previously static /etc/dnsmasq.conf)
     const dnsmasqLines = [
       `interface=${wifiInterface}`,
+      "bind-interfaces",
+      "dhcp-authoritative",
       `dhcp-range=${subnet}.10,${subnet}.50,255.255.255.0,12h`,
       `dhcp-option=3,${hotspotIp}`,
       `dhcp-option=6,${hotspotIp}`,
       "no-resolv",
       `address=/#/${hotspotIp}`,
+      "log-dhcp",
     ]
 
     const configPath = "/tmp/hostapd-yingnode.conf"
@@ -213,6 +216,9 @@ class NetworkService {
       await execAsync(`sudo hostapd -B ${configPath}`)
       // Brief delay so the AP interface is ready before dnsmasq binds
       await new Promise((r) => setTimeout(r, 1500))
+      // Re-bind static IP — some drivers drop the IP during AP mode transition
+      this.staticIpEnsured = false
+      await this.ensureStaticIp()
       await execAsync(`sudo dnsmasq -C ${dnsmasqConfigPath}`)
       await this.updateDB({ status: "HOTSPOT_ACTIVE", hotspotActive: true })
     } catch (err) {
