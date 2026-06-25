@@ -4,14 +4,21 @@ set -euo pipefail
 # ============================================================
 # YingNode 一键部署脚本
 #
-# GitHub:
+# 快速开始:
 #   curl -fsSL https://raw.githubusercontent.com/wang-zhongyu/yingnode-web/main/deploy/install.sh | sudo bash
 #
-# 国内镜像 (Gitee):
-#   curl -fsSL https://gitee.com/LukeWang95/yingnode-web/raw/main/deploy/install.sh | sudo bash
+# 环境变量 (非交互模式):
+#   REPO_SOURCE=github|gitee   仓库源选择
+#   NPM_SOURCE=official|mirror npm 源选择
+#   NPM_MIRROR=<url>           自定义 npm 镜像 (兼容旧用法)
+#   REINSTALL=overwrite|update|rebuild|abort  已安装时的行为
 #
-# npm 国内加速:
-#   NPM_MIRROR=https://registry.npmmirror.com curl -fsSL <URL> | sudo bash
+# 示例:
+#   # 国内环境非交互部署
+#   REPO_SOURCE=gitee NPM_SOURCE=mirror curl -fsSL <URL> | sudo bash
+#
+#   # 更新已有部署
+#   REINSTALL=update curl -fsSL <URL> | sudo bash
 # ============================================================
 
 REPO_GITHUB="https://github.com/wang-zhongyu/yingnode-web.git"
@@ -396,6 +403,7 @@ show_info() {
     log "  ----------------------------------------"
     log "  服务状态:     systemctl status yingnode"
     log "  查看日志:     journalctl -u yingnode -f"
+    log "  安装源:       ${REPO_URL##*/}"
     log "============================================"
 }
 
@@ -407,6 +415,34 @@ main() {
 
     log "YingNode 一键部署开始..."
     detect_os
+    select_sources
+
+    if check_installed; then
+        # 已安装 — 更新/重建路径
+        if [ "${SKIP_CLONE:-false}" = true ]; then
+            # 仅重建: 跳过 install_node/install_network_deps/create_user
+            deploy_app
+            build_app
+            post_install
+            start_services
+            show_info
+            return
+        fi
+        # 更新代码
+        install_node
+        install_network_deps
+        deploy_app
+        configure_env
+        configure_system
+        install_service
+        build_app
+        post_install
+        start_services
+        show_info
+        return
+    fi
+
+    # 全新安装
     install_node
     install_network_deps
     create_user
