@@ -150,6 +150,7 @@ deploy_app() {
 
     log "同步数据库结构..."
     mkdir -p /data
+    rm -f /data/yingnode.db /data/yingnode.db-journal
     npx prisma db push
 }
 
