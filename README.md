@@ -32,20 +32,41 @@
 在目标设备上以 root 运行：
 
 ```bash
-# GitHub
+# GitHub (默认)
 curl -fsSL https://raw.githubusercontent.com/wang-zhongyu/yingnode-web/main/deploy/install.sh | sudo bash
 
-# Gitee 镜像（国内）
+# Gitee 镜像
 curl -fsSL https://gitee.com/LukeWang95/yingnode-web/raw/main/deploy/install.sh | sudo bash
-
-# npm 国内加速
-NPM_MIRROR=https://registry.npmmirror.com \
-curl -fsSL <URL> | sudo bash
 ```
 
-脚本自动完成：系统检测 → Node.js 安装 → 网络依赖安装 → 克隆仓库 → 安装依赖 → 数据库同步 → 系统配置 → 安装 systemd 服务 → 构建应用 → 启动服务。
+### 环境变量
 
-部署完成后访问 `http://<设备IP>:3000` 进入管理面板。
+脚本支持交互式选择，也可通过环境变量预设（适合 CI/CD）：
+
+| 变量 | 值 | 说明 |
+|------|----|------|
+| `REPO_SOURCE` | `github` / `gitee` | 仓库源选择 |
+| `NPM_SOURCE` | `official` / `mirror` | npm 源选择 |
+| `NPM_MIRROR` | `<url>` | 自定义 npm 镜像 (兼容旧用法) |
+| `REINSTALL` | `overwrite` / `update` / `rebuild` / `abort` | 已安装时的行为 |
+
+```bash
+# 国内环境 — 全自动非交互部署
+REPO_SOURCE=gitee NPM_SOURCE=mirror \
+curl -fsSL https://gitee.com/LukeWang95/yingnode-web/raw/main/deploy/install.sh | sudo bash
+
+# 更新已有部署
+REINSTALL=update \
+curl -fsSL https://raw.githubusercontent.com/wang-zhongyu/yingnode-web/main/deploy/install.sh | sudo bash
+```
+
+### 已安装检测
+
+重复运行脚本时，会自动检测 `/opt/yingnode` 是否已部署：
+- 有 TTY 时交互式选择操作
+- 无 TTY 时通过 `REINSTALL` 环境变量控制
+
+脚本自动完成：系统检测 → 源选择 → Node.js 安装 → ...
 
 ## Docker 部署
 
