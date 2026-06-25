@@ -14,11 +14,84 @@ set -euo pipefail
 #   NPM_MIRROR=https://registry.npmmirror.com curl -fsSL <URL> | sudo bash
 # ============================================================
 
-REPO="https://github.com/wang-zhongyu/yingnode-web.git"
-REPO_MIRROR="https://gitee.com/LukeWang95/yingnode-web.git"
+REPO_GITHUB="https://github.com/wang-zhongyu/yingnode-web.git"
+REPO_GITEE="https://gitee.com/LukeWang95/yingnode-web.git"
+REPO_URL=""  # set by select_sources()
 INSTALL_DIR="/opt/yingnode"
 NODE_VERSION="22"
 SERVICE_NAME="yingnode"
+
+# ---- 交互辅助函数 ----
+# 交互模式: 从 /dev/tty 读取用户输入
+# 非交互模式 (CI/管道): 从同名环境变量读取，未设则返回默认值
+prompt() {
+    local env_var="$1"
+    local message="$2"
+    local default="$3"
+
+    # 非交互模式 — 检查环境变量
+    if [ ! -t 0 ] || [ ! -c /dev/tty ]; then
+        local env_val
+        env_val="$(printenv "$env_var" 2>/dev/null || true)"
+        if [ -n "$env_val" ]; then
+            echo "  [非交互] $env_var=$env_val" >&2
+            echo "$env_val"
+            return
+        fi
+        echo "  [非交互] $env_var 未设置，使用默认值: $default" >&2
+        echo "$default"
+        return
+    fi
+
+    # 交互模式 — 从 /dev/tty 读
+    printf "%s [%s]: " "$message" "$default" > /dev/tty
+    read -r answer < /dev/tty
+    echo "${answer:-$default}"
+}
+
+# ---- 源选择 ----
+select_sources() {
+    # --- 仓库源 ---
+    local repo_choice
+    repo_choice=$(prompt "REPO_SOURCE" "选择仓库源: [1]GitHub [2]Gitee 镜像" "1")
+    case "${repo_choice}" in
+        2|gitee|Gitee)
+            REPO_URL="$REPO_GITEE"
+            log "仓库源: Gitee 镜像"
+            ;;
+        *)
+            REPO_URL="$REPO_GITHUB"
+            log "仓库源: GitHub"
+            ;;
+    esac
+
+    # --- npm 源 (NPM_MIRROR 环境变量优先，兼容旧用法) ---
+    if [ -n "${NPM_MIRROR:-}" ]; then
+        NPM_REGISTRY="$NPM_MIRROR"
+        log "npm 镜像: $NPM_MIRROR (来自 NPM_MIRROR 环境变量)"
+        # 判断是否国内镜像以设置 Node.js 二进制源
+        case "$NPM_MIRROR" in
+            *npmmirror*|*taobao*) NPM_MIRROR_NODE=true ;;
+            *) NPM_MIRROR_NODE=false ;;
+        esac
+        return
+    fi
+
+    local npm_choice
+    npm_choice=$(prompt "NPM_SOURCE" "选择 npm 源: [1]官方 [2]国内镜像 (npmmirror)" "1")
+    case "${npm_choice}" in
+        2|mirror|镜像)
+            NPM_REGISTRY="https://registry.npmmirror.com"
+            NPM_MIRROR_NODE=true
+            log "npm 源: 国内镜像"
+            ;;
+        *)
+            NPM_REGISTRY="https://registry.npmjs.org"
+            NPM_MIRROR_NODE=false
+            log "npm 源: 官方"
+            ;;
+    esac
+}
 
 # ---- 工具函数 ----
 # 带重试和镜像回退的下载
@@ -45,14 +118,15 @@ download() {
 
 # 克隆仓库（GitHub 优先，gitee 镜像回退）
 clone_repo() {
-    if git clone --depth 1 "$REPO" "$INSTALL_DIR" 2>/dev/null; then
+    if git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" 2>/dev/null; then
         return 0
     fi
-    warn "GitHub 克隆失败，尝试 Gitee 镜像..."
-    if git clone --depth 1 "$REPO_MIRROR" "$INSTALL_DIR" 2>/dev/null; then
-        # 切换 remote 回 GitHub
+    warn "主源克隆失败，尝试备用源..."
+    local alt_repo="$REPO_GITEE"
+    [ "$REPO_URL" = "$REPO_GITEE" ] && alt_repo="$REPO_GITHUB"
+    if git clone --depth 1 "$alt_repo" "$INSTALL_DIR" 2>/dev/null; then
         cd "$INSTALL_DIR"
-        git remote set-url origin "$REPO"
+        git remote set-url origin "$REPO_URL"
         return 0
     fi
     err "无法克隆仓库，请检查网络连接"
@@ -126,7 +200,7 @@ deploy_app() {
         # 先获取当前 remote，尝试 pull
         git pull origin main 2>/dev/null || {
             warn "GitHub 更新失败，尝试 Gitee 镜像..."
-            git remote add gitee "$REPO_MIRROR" 2>/dev/null || true
+            git remote add gitee "$REPO_GITEE" 2>/dev/null || true
             git pull gitee main 2>/dev/null || warn "更新失败，继续使用当前版本"
         }
     else
