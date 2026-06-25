@@ -300,8 +300,8 @@ main() {
     install_node
     install_network_deps
     create_user
-    configure_env
     deploy_app
+    configure_env
     configure_system
     install_service
     build_app
