@@ -27,10 +27,14 @@ class NetworkService {
 
   /** Check and correct WiFi interface state before network operations.
    *  1. Bring interface UP if down
-   *  2. Switch from Monitor to Managed mode (hostapd + nl80211 can go AP from managed, not monitor)
+   *  2. Switch from Monitor/Master to Managed mode (skip Master when
+   *     hotspot is active — switching mode while hostapd runs can kill
+   *     the AP on some drivers, and on nl80211 it fails with EBUSY)
    *  3. Tell NetworkManager to unmanage the interface if NM is running
    *  Returns false only if the interface is missing entirely. */
-  async ensureInterfaceReady(): Promise<{ ok: boolean; reason?: string }> {
+  async ensureInterfaceReady(opts?: {
+    skipApModeCheck?: boolean
+  }): Promise<{ ok: boolean; reason?: string }> {
     const { wifiInterface } = await this.getConfig()
     const iface = escapeShellArg(wifiInterface)
 
@@ -49,10 +53,14 @@ class NetworkService {
     }
 
     // 2. Check wireless mode — must not be Monitor or Master (AP)
+    //    Skip Master check when called from monitor (hotspot may be running)
     try {
       const { stdout: modeOutput } = await execAsync(`iwconfig ${iface} 2>/dev/null`)
-      if (modeOutput.includes("Mode:Monitor") || modeOutput.includes("Mode:Master")) {
-        const modeName = modeOutput.includes("Mode:Monitor") ? "Monitor" : "AP"
+      const isMonitor = modeOutput.includes("Mode:Monitor")
+      const isMaster = modeOutput.includes("Mode:Master")
+
+      if (isMonitor || (isMaster && !opts?.skipApModeCheck)) {
+        const modeName = isMonitor ? "Monitor" : "AP"
         await execAsync(`sudo iwconfig ${iface} mode managed`)
         console.log(`[network] Switched ${wifiInterface} from ${modeName} to Managed`)
         // Allow mode switch to settle before subsequent operations

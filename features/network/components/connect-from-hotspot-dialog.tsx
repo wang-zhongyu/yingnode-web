@@ -38,13 +38,21 @@ export function ConnectFromHotspotDialog() {
 
       toast.success(`已连接到 "${ssid}"`)
       close()
-    } catch {
-      // The fetch itself failed. This is expected when the server kills
-      // hostapd mid-request: the client loses its connection to the server.
-      toast.error("请求中断", {
-        description:
-          "热点已关闭，与服务器的连接已断开。如果连接未成功，热点将自动恢复，请重新连接热点后检查网络状态。",
-      })
+    } catch (err) {
+      // Distinguish network failure (hotspot stopped → connection lost)
+      // from JSON parse failure (server returned non-JSON)
+      if (err instanceof TypeError) {
+        // Network error: the hotspot was stopped mid-request.
+        // The server may have succeeded (device now on external WiFi)
+        // or failed (hotspot restarted). We can't tell which.
+        toast.error("热点已关闭", {
+          description:
+            "如果连接成功，设备已接入外部 Wi-Fi，可通过固定 IP 访问面板。如果连接失败，热点将自动恢复，请重新连接热点。",
+          duration: 8000,
+        })
+      } else {
+        toast.error("连接失败，请重试")
+      }
     } finally {
       setConnecting(false)
     }

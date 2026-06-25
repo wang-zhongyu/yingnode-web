@@ -71,7 +71,9 @@ function startNetworkMonitor(
     startHotspot(): Promise<void>
     stopHotspot(): Promise<void>
     updateDB(fields: Record<string, unknown>): Promise<void>
-    ensureInterfaceReady(): Promise<{ ok: boolean; reason?: string }>
+    ensureInterfaceReady(opts?: {
+      skipApModeCheck?: boolean
+    }): Promise<{ ok: boolean; reason?: string }>
   },
   isManualHotspotLocked: () => boolean,
 ) {
@@ -81,7 +83,10 @@ function startNetworkMonitor(
   const check = async () => {
     try {
       // Verify interface is in correct state before connectivity checks
-      const ready = await networkService.ensureInterfaceReady()
+      // Skip AP mode check — don't kill a running hotspot
+      const ready = await networkService.ensureInterfaceReady({
+        skipApModeCheck: true,
+      })
       if (!ready.ok) {
         console.warn(`[monitor] Interface not ready: ${ready.reason}; skipping tick`)
         return

@@ -58,7 +58,7 @@ export function ManualAddDialog() {
           onConnect={handleConnect}
         />
         <DialogFooter>
-          <Button variant="outline" onClick={close}>
+          <Button variant="outline" onClick={close} disabled={connecting}>
             取消
           </Button>
           <Button form="manual-add-form" type="submit" disabled={connecting}>
