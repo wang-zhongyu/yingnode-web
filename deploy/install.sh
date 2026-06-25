@@ -172,8 +172,7 @@ configure_system() {
     cp "$INSTALL_DIR/config/sudoers.d/yingnode" /etc/sudoers.d/yingnode
     chmod 440 /etc/sudoers.d/yingnode
 
-    # dnsmasq config is still static
-    cp -n "$INSTALL_DIR/config/dnsmasq.conf" /etc/dnsmasq.conf 2>/dev/null || true
+    # hostapd 和 dnsmasq 配置由应用动态生成，不再需要复制静态文件
 }
 
 # ---- 配置环境变量 ----

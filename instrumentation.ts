@@ -4,6 +4,15 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs" && !monitorStarted) {
     monitorStarted = true
 
+    // Clean up stale temp config files from a previous crash
+    try {
+      const fs = await import("fs/promises")
+      await fs.unlink("/tmp/hostapd-yingnode.conf")
+      await fs.unlink("/tmp/dnsmasq-yingnode.conf")
+    } catch {
+      // files don't exist — normal, nothing to clean
+    }
+
     // Dynamic import — network-service uses Node.js modules
     // (child_process, path, prisma) which are NOT Edge Runtime compatible.
     const { networkService } = await import("@/shared/lib/network-service")
