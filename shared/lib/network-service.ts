@@ -32,15 +32,16 @@ class NetworkService {
    *  Returns false only if the interface is missing entirely. */
   async ensureInterfaceReady(): Promise<{ ok: boolean; reason?: string }> {
     const { wifiInterface } = await this.getConfig()
+    const iface = escapeShellArg(wifiInterface)
 
     // 1. Check interface exists and is UP
     try {
-      const { stdout: upOutput } = await execAsync(`ip link show ${wifiInterface}`)
+      const { stdout: upOutput } = await execAsync(`ip link show ${iface}`)
       if (!upOutput.includes(wifiInterface)) {
         return { ok: false, reason: `Interface ${wifiInterface} not found` }
       }
       if (upOutput.includes("state DOWN")) {
-        await execAsync(`sudo ip link set ${wifiInterface} up`)
+        await execAsync(`sudo ip link set ${iface} up`)
         console.log(`[network] Brought ${wifiInterface} UP`)
       }
     } catch {
@@ -49,9 +50,9 @@ class NetworkService {
 
     // 2. Check wireless mode — must not be Monitor
     try {
-      const { stdout: modeOutput } = await execAsync(`iwconfig ${wifiInterface} 2>/dev/null`)
+      const { stdout: modeOutput } = await execAsync(`iwconfig ${iface} 2>/dev/null`)
       if (modeOutput.includes("Mode:Monitor")) {
-        await execAsync(`sudo iwconfig ${wifiInterface} mode managed`)
+        await execAsync(`sudo iwconfig ${iface} mode managed`)
         console.log(`[network] Switched ${wifiInterface} from Monitor to Managed`)
       }
     } catch {
@@ -62,7 +63,7 @@ class NetworkService {
     try {
       await execAsync("systemctl is-active --quiet NetworkManager")
       await execAsync(
-        `sudo nmcli device set ${wifiInterface} managed no 2>/dev/null || true`,
+        `sudo nmcli device set ${iface} managed no 2>/dev/null || true`,
       )
       console.log(`[network] Told NetworkManager to unmanage ${wifiInterface}`)
     } catch {
@@ -80,12 +81,16 @@ class NetworkService {
     if (this.staticIpEnsured) return
 
     const { wifiInterface, hotspotIp } = await this.getConfig()
+    const iface = escapeShellArg(wifiInterface)
 
     try {
-      // Check if IP already exists on interface
-      const { stdout } = await execAsync(`ip -4 addr show dev ${wifiInterface}`)
-      if (!stdout.includes(hotspotIp)) {
-        await execAsync(`sudo ip addr add ${hotspotIp}/24 dev ${wifiInterface}`)
+      // Check if IP already exists on interface (exact match via word boundary)
+      const { stdout } = await execAsync(`ip -4 addr show dev ${iface}`)
+      const ipRegex = new RegExp(
+        `\\b${hotspotIp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+      )
+      if (!ipRegex.test(stdout)) {
+        await execAsync(`sudo ip addr add ${hotspotIp}/24 dev ${iface}`)
       }
       this.staticIpEnsured = true
     } catch {
@@ -209,13 +214,34 @@ class NetworkService {
     const configPath = "/tmp/hostapd-yingnode.conf"
     const dnsmasqConfigPath = "/tmp/dnsmasq-yingnode.conf"
     const fs = await import("fs/promises")
-    await fs.writeFile(configPath, configLines.join("\n") + "\n")
-    await fs.writeFile(dnsmasqConfigPath, dnsmasqLines.join("\n") + "\n")
+    await fs.writeFile(configPath, configLines.join("\n") + "\n", { mode: 0o600 })
+    await fs.writeFile(dnsmasqConfigPath, dnsmasqLines.join("\n") + "\n", { mode: 0o600 })
 
     try {
       await execAsync(`sudo hostapd -B ${configPath}`)
-      // Brief delay so the AP interface is ready before dnsmasq binds
-      await new Promise((r) => setTimeout(r, 1500))
+
+      // Wait for AP interface readiness (retry up to 10s on slow HW)
+      let apReady = false
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 1000))
+        try {
+          const { stdout } = await execAsync(
+            `iw dev ${escapeShellArg(wifiInterface)} info 2>/dev/null`,
+          )
+          if (stdout.includes("type AP")) {
+            apReady = true
+            break
+          }
+        } catch {
+          // keep waiting
+        }
+      }
+      if (!apReady) {
+        console.warn(
+          "[network] AP interface not confirmed ready after 10s, continuing anyway",
+        )
+      }
+
       // Re-bind static IP — some drivers drop the IP during AP mode transition
       this.staticIpEnsured = false
       await this.ensureStaticIp()
@@ -223,7 +249,8 @@ class NetworkService {
       await this.updateDB({ status: "HOTSPOT_ACTIVE", hotspotActive: true })
     } catch (err) {
       console.error("[network] Failed to start hotspot:", err)
-      // Don't set HOTSPOT_ACTIVE if hostapd/dnsmasq failed
+      // Rollback: kill any running hostapd so we don't leak an AP with no DHCP
+      try { await execAsync("sudo killall hostapd") } catch { /* not running */ }
       try { await fs.unlink(configPath) } catch { /* best-effort cleanup */ }
       try { await fs.unlink(dnsmasqConfigPath) } catch { /* best-effort cleanup */ }
     }
