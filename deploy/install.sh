@@ -52,7 +52,7 @@ prompt() {
 
     # 交互模式 — 从 /dev/tty 读
     printf "%s [%s]: " "$message" "$default" > /dev/tty
-    read -r answer < /dev/tty
+    read -r answer < /dev/tty || true
     echo "${answer:-$default}"
 }
 
@@ -233,6 +233,7 @@ deploy_app() {
     elif [ -d "$INSTALL_DIR/.git" ]; then
         log "更新已有仓库..."
         cd "$INSTALL_DIR"
+        git remote set-url origin "$REPO_URL"
         git pull origin main 2>/dev/null || \
             warn "更新失败，继续使用当前版本"
     else
