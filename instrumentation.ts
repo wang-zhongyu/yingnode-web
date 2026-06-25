@@ -1,5 +1,12 @@
 let monitorStarted = false
 
+async function loadHotspotLock() {
+  const { isManualHotspotLocked } = await import(
+    "@/shared/lib/hotspot-lock"
+  )
+  return isManualHotspotLocked
+}
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs" && !monitorStarted) {
     monitorStarted = true
@@ -40,7 +47,8 @@ export async function register() {
     // Ensure the device is always reachable on the fixed IP
     await networkService.ensureStaticIp()
 
-    startNetworkMonitor(networkService)
+    const isManualHotspotLocked = await loadHotspotLock()
+    startNetworkMonitor(networkService, isManualHotspotLocked)
 
     // Add: start metrics collector
     const { startMetricsCollector } = await import(
@@ -50,20 +58,23 @@ export async function register() {
   }
 }
 
-function startNetworkMonitor(networkService: {
-  isOnline(): Promise<boolean>
-  getStatus(): Promise<{
-    status: string
-    hotspotActive: boolean
-    lastCheck: string
-    currentSSID: string | null
-    ipAddress: string | null
-  }>
-  startHotspot(): Promise<void>
-  stopHotspot(): Promise<void>
-  updateDB(fields: Record<string, unknown>): Promise<void>
-  ensureInterfaceReady(): Promise<{ ok: boolean; reason?: string }>
-}) {
+function startNetworkMonitor(
+  networkService: {
+    isOnline(): Promise<boolean>
+    getStatus(): Promise<{
+      status: string
+      hotspotActive: boolean
+      lastCheck: string
+      currentSSID: string | null
+      ipAddress: string | null
+    }>
+    startHotspot(): Promise<void>
+    stopHotspot(): Promise<void>
+    updateDB(fields: Record<string, unknown>): Promise<void>
+    ensureInterfaceReady(): Promise<{ ok: boolean; reason?: string }>
+  },
+  isManualHotspotLocked: () => boolean,
+) {
   let consecutiveFailures = 0
   let consecutiveSuccesses = 0
 
@@ -84,15 +95,23 @@ function startNetworkMonitor(networkService: {
         consecutiveSuccesses++
 
         if (status.hotspotActive && consecutiveSuccesses >= 3) {
-          await networkService.stopHotspot()
-          consecutiveSuccesses = 0
+          if (isManualHotspotLocked()) {
+            console.log("[monitor] Hotspot locked, skipping stopHotspot")
+          } else {
+            await networkService.stopHotspot()
+            consecutiveSuccesses = 0
+          }
         }
       } else {
         consecutiveSuccesses = 0
         consecutiveFailures++
 
         if (!status.hotspotActive && consecutiveFailures >= 3) {
-          await networkService.startHotspot()
+          if (isManualHotspotLocked()) {
+            console.log("[monitor] Hotspot locked, skipping startHotspot")
+          } else {
+            await networkService.startHotspot()
+          }
         }
 
         if (status.status !== "HOTSPOT_ACTIVE" && consecutiveFailures >= 3) {

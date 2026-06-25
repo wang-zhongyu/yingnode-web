@@ -1,6 +1,6 @@
 import { create } from "zustand"
 
-export type ModalType = "manualAddNetwork" | "networkSettings" | "terminal"
+export type ModalType = "manualAddNetwork" | "networkSettings" | "terminal" | "connectFromHotspot"
 
 export interface ModalData {
   ssid?: string

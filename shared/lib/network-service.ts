@@ -48,12 +48,15 @@ class NetworkService {
       return { ok: false, reason: `Cannot read state of ${wifiInterface}` }
     }
 
-    // 2. Check wireless mode — must not be Monitor
+    // 2. Check wireless mode — must not be Monitor or Master (AP)
     try {
       const { stdout: modeOutput } = await execAsync(`iwconfig ${iface} 2>/dev/null`)
-      if (modeOutput.includes("Mode:Monitor")) {
+      if (modeOutput.includes("Mode:Monitor") || modeOutput.includes("Mode:Master")) {
+        const modeName = modeOutput.includes("Mode:Monitor") ? "Monitor" : "AP"
         await execAsync(`sudo iwconfig ${iface} mode managed`)
-        console.log(`[network] Switched ${wifiInterface} from Monitor to Managed`)
+        console.log(`[network] Switched ${wifiInterface} from ${modeName} to Managed`)
+        // Allow mode switch to settle before subsequent operations
+        await new Promise((r) => setTimeout(r, 1000))
       }
     } catch {
       // iwconfig may fail on non-wireless interfaces — non-fatal

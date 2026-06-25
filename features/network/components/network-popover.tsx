@@ -12,6 +12,7 @@ import { CurrentStatus } from "./current-status"
 import { WiFiList } from "./wifi-list"
 import { ManualAddItem } from "./manual-add-item"
 import { NetworkSettingsEntry } from "./network-settings-entry"
+import { ConnectFromHotspotEntry } from "./connect-from-hotspot-entry"
 
 export function NetworkPopover() {
   const [status, setStatus] = useState<NetworkStatus | null>(null)
@@ -94,10 +95,22 @@ export function NetworkPopover() {
         reachableIp={status?.reachableIp ?? null}
       />
       <Separator />
+      {effectiveStatus.hotspotActive && (
+        <>
+          <ConnectFromHotspotEntry />
+          <Separator />
+        </>
+      )}
       {scanning ? (
         <SpinnerEmpty message="正在扫描网络..." />
       ) : networks.length === 0 ? (
-        <ListEmpty message="未发现可用网络" />
+        <ListEmpty
+          message={
+            effectiveStatus.hotspotActive
+              ? "热点模式下无法扫描网络"
+              : "未发现可用网络"
+          }
+        />
       ) : (
         <>
           <WiFiList networks={networks} onConnect={handleConnect} />
