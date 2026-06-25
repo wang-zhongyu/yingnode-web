@@ -93,6 +93,46 @@ select_sources() {
     esac
 }
 
+# ---- 已安装检测 ----
+check_installed() {
+    if [ ! -d "$INSTALL_DIR/.git" ]; then
+        return 1  # 未安装 → 全新安装
+    fi
+
+    local ts
+    ts=$(stat -c %y "$INSTALL_DIR/.git" 2>/dev/null || echo "未知时间")
+    warn "检测到已安装 (${ts})"
+
+    local action
+    action=$(prompt "REINSTALL" \
+        "检测到已安装，请选择: [1]覆盖安装 [2]更新代码 [3]重新构建 [4]退出" \
+        "2")
+
+    case "${action}" in
+        1|overwrite)
+            log "停止服务并清空目录..."
+            systemctl stop "$SERVICE_NAME" yingnode-terminal 2>/dev/null || true
+            rm -rf "$INSTALL_DIR"
+            return 1  # 走向全新安装流程
+            ;;
+        2|update)
+            log "将更新代码并重新构建..."
+            SKIP_DB_RESET=true
+            return 0  # 走向 deploy_app (git pull 分支)
+            ;;
+        3|rebuild)
+            log "将跳过代码更新，仅重新构建..."
+            SKIP_CLONE=true
+            SKIP_DB_RESET=true
+            return 0
+            ;;
+        *)
+            log "已取消，退出。"
+            exit 0
+            ;;
+    esac
+}
+
 # ---- 工具函数 ----
 # 带重试和镜像回退的下载
 download() {
