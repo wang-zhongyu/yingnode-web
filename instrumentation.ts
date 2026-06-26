@@ -20,6 +20,26 @@ export async function register() {
       // files don't exist — normal, nothing to clean
     }
 
+    // Restore NetworkManager management for WiFi interface (leftover from previous crash)
+    // Only restore if hostapd is NOT running — we don't want to fight an active hotspot
+    try {
+      const { execAsync: execAsyncShell } = await import("@/shared/lib/shell")
+      const hostapdRunning = await execAsyncShell("pgrep hostapd", 3000)
+        .then((r: { stdout: string }) => r.stdout.trim().length > 0)
+        .catch(() => false)
+
+      if (!hostapdRunning) {
+        const wifiInterface = process.env.WIFI_INTERFACE ?? "wlan0"
+        await execAsyncShell(
+          `sudo nmcli device set ${wifiInterface} managed yes 2>/dev/null || true`,
+          5000,
+        )
+        console.log("[init] Restored NM management for WiFi interface")
+      } else {
+        console.log("[init] Hotspot is active, skipping NM recovery")
+      }
+    } catch { /* NM might not be running — ok */ }
+
     // Dynamic import — network-service uses Node.js modules
     // (child_process, path, prisma) which are NOT Edge Runtime compatible.
     const { networkService } = await import("@/shared/lib/network-service")

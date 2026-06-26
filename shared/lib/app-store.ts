@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from "fs"
 import { join } from "path"
 import { spawn } from "child_process"
 import type { AppDefinition, AppWithStatus } from "@/shared/types/app"
+import { checkCommandSafety, backupNetworkConfig } from "@/shared/lib/app-store-safety"
 
 const CONFIG_PATH = join(process.cwd(), "config", "apps.json")
 const INSTALL_TIMEOUT = 600_000 // 10 minutes
@@ -67,18 +68,48 @@ class AppStore {
     return result
   }
 
-  async installApp(id: string): Promise<{ ok: boolean; output: string }> {
+  async installApp(id: string): Promise<{ ok: boolean; output: string; warnings?: string[] }> {
     const app = this.getDefinitions().find((a) => a.id === id)
     if (!app) return { ok: false, output: `应用 ${id} 不存在` }
 
-    return execCommand(app.install)
+    // Pre-flight safety check
+    const { safe, warnings } = checkCommandSafety(app.install)
+    if (!safe) {
+      console.warn(`[app-store] Dangerous patterns in install script for "${id}":`, warnings)
+    }
+
+    // Backup network config before execution
+    const backupPath = await backupNetworkConfig()
+    if (backupPath) {
+      console.log(`[app-store] Network config backed up to ${backupPath}`)
+    }
+
+    const result = await execCommand(app.install)
+
+    return {
+      ok: result.ok,
+      output: result.output,
+      ...(warnings.length > 0 ? { warnings } : {}),
+    }
   }
 
-  async uninstallApp(id: string): Promise<{ ok: boolean; output: string }> {
+  async uninstallApp(id: string): Promise<{ ok: boolean; output: string; warnings?: string[] }> {
     const app = this.getDefinitions().find((a) => a.id === id)
     if (!app?.uninstall) return { ok: false, output: "该应用不支持卸载" }
 
-    return execCommand(app.uninstall)
+    // Pre-flight safety check
+    const { warnings } = checkCommandSafety(app.uninstall)
+    if (warnings.length > 0) {
+      console.warn(`[app-store] Dangerous patterns in uninstall script for "${id}":`, warnings)
+    }
+
+    const result = await execCommand(app.uninstall)
+
+    return {
+      ok: result.ok,
+      output: result.output,
+      ...(warnings.length > 0 ? { warnings } : {}),
+    }
   }
 }
 

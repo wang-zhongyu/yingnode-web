@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma"
 import { getDeviceConfig } from "@/shared/lib/device-config"
-import { execAsync, escapeShellArg } from "@/shared/lib/shell"
+import { execAsync, escapeShellArg, safeArg } from "@/shared/lib/shell"
 import type { NetworkStatus, WiFiNetwork, ConnectResult } from "@/shared/types/network"
 
 const PING_TARGET = "8.8.8.8"
@@ -9,11 +9,16 @@ const DNS_TEST_DOMAIN = "google.com"
 class NetworkService {
   private staticIpEnsured = false
   private configCache: Awaited<ReturnType<typeof getDeviceConfig>> | null = null
+  private configCacheTime: number = 0
+  private static readonly CONFIG_CACHE_TTL_MS = 30_000 // 30 seconds
+  private nmManagedIface: string | null = null
 
   /** Read device config from DB, with env-var fallback. Cached after first read. */
   async getConfig() {
-    if (!this.configCache) {
+    const now = Date.now()
+    if (!this.configCache || now - this.configCacheTime > NetworkService.CONFIG_CACHE_TTL_MS) {
       this.configCache = await getDeviceConfig()
+      this.configCacheTime = now
     }
     return this.configCache
   }
@@ -22,7 +27,18 @@ class NetworkService {
    *  Also resets staticIpEnsured so the new IP gets bound on next ensureStaticIp call. */
   clearConfigCache(): void {
     this.configCache = null
+    this.configCacheTime = 0
     this.staticIpEnsured = false
+  }
+
+  /** Check if the yingnode dnsmasq process is running. */
+  private async verifyDnsmasqRunning(): Promise<boolean> {
+    try {
+      const { stdout } = await execAsync("pgrep -f 'dnsmasq.*dnsmasq-yingnode'", 3000)
+      return stdout.trim().length > 0
+    } catch {
+      return false
+    }
   }
 
   /** Check and correct WiFi interface state before network operations.
@@ -36,16 +52,15 @@ class NetworkService {
     skipApModeCheck?: boolean
   }): Promise<{ ok: boolean; reason?: string }> {
     const { wifiInterface } = await this.getConfig()
-    const iface = escapeShellArg(wifiInterface)
 
     // 1. Check interface exists and is UP
     try {
-      const { stdout: upOutput } = await execAsync(`ip link show ${iface}`)
+      const { stdout: upOutput } = await execAsync(`ip link show ${safeArg(wifiInterface)}`)
       if (!upOutput.includes(wifiInterface)) {
         return { ok: false, reason: `Interface ${wifiInterface} not found` }
       }
       if (upOutput.includes("state DOWN")) {
-        await execAsync(`sudo ip link set ${iface} up`)
+        await execAsync(`sudo ip link set ${safeArg(wifiInterface)} up`)
         console.log(`[network] Brought ${wifiInterface} UP`)
       }
     } catch {
@@ -55,33 +70,89 @@ class NetworkService {
     // 2. Check wireless mode — must not be Monitor or Master (AP)
     //    Skip Master check when called from monitor (hotspot may be running)
     try {
-      const { stdout: modeOutput } = await execAsync(`iwconfig ${iface} 2>/dev/null`)
+      const { stdout: modeOutput } = await execAsync(`iwconfig ${safeArg(wifiInterface)} 2>/dev/null`)
       const isMonitor = modeOutput.includes("Mode:Monitor")
       const isMaster = modeOutput.includes("Mode:Master")
 
       if (isMonitor || (isMaster && !opts?.skipApModeCheck)) {
         const modeName = isMonitor ? "Monitor" : "AP"
-        await execAsync(`sudo iwconfig ${iface} mode managed`)
-        console.log(`[network] Switched ${wifiInterface} from ${modeName} to Managed`)
-        // Allow mode switch to settle before subsequent operations
-        await new Promise((r) => setTimeout(r, 1000))
+        try {
+          await execAsync(`sudo iwconfig ${safeArg(wifiInterface)} mode managed`)
+          console.log(`[network] Switched ${wifiInterface} from ${modeName} to Managed`)
+          // Allow mode switch to settle before subsequent operations
+          await new Promise((r) => setTimeout(r, 1000))
+
+          // Verify the mode actually changed
+          try {
+            const { stdout: verifyOut } = await execAsync(`iwconfig ${safeArg(wifiInterface)} 2>/dev/null`)
+            const stillBad = isMonitor ? verifyOut.includes("Mode:Monitor") : verifyOut.includes("Mode:Master")
+            if (stillBad) {
+              console.error(
+                `[network] Failed to switch ${wifiInterface} from ${modeName} to Managed — driver may not support mode change`,
+              )
+              return { ok: false, reason: `Cannot switch ${wifiInterface} out of ${modeName} mode` }
+            }
+          } catch {
+            // verification failed but mode switch command succeeded — continue
+          }
+        } catch (switchErr) {
+          console.error(
+            `[network] Mode switch command failed for ${wifiInterface}:`,
+            (switchErr as Error).message,
+          )
+          return { ok: false, reason: `Failed to switch ${wifiInterface} from ${modeName} to Managed` }
+        }
       }
-    } catch {
-      // iwconfig may fail on non-wireless interfaces — non-fatal
+    } catch (err) {
+      // iwconfig itself failed — distinguish between "not wireless" and real errors
+      const msg = (err as Error).message ?? ""
+      if (msg.includes("no wireless extensions")) {
+        // Not a wireless interface — non-fatal
+        console.log(`[network] ${wifiInterface} is not a wireless interface, skipping mode check`)
+      } else {
+        console.error(`[network] iwconfig error for ${wifiInterface}:`, msg)
+        return { ok: false, reason: `Cannot check wireless mode: ${msg}` }
+      }
     }
 
     // 3. Check for NetworkManager interference
     try {
       await execAsync("systemctl is-active --quiet NetworkManager")
       await execAsync(
-        `sudo nmcli device set ${iface} managed no 2>/dev/null || true`,
+        `sudo nmcli device set ${safeArg(wifiInterface)} managed no 2>/dev/null || true`,
       )
       console.log(`[network] Told NetworkManager to unmanage ${wifiInterface}`)
+      // Record that we took over NM management for this interface
+      if (!this.nmManagedIface) {
+        this.nmManagedIface = wifiInterface
+        this.registerNMRecovery()
+      }
     } catch {
       // NetworkManager not running — ok
     }
 
     return { ok: true }
+  }
+
+  /** Register process exit handlers to restore NM management on crash/stop. */
+  private registerNMRecovery(): void {
+    const restore = async () => {
+      if (!this.nmManagedIface) return
+      try {
+        await execAsync(
+          `sudo nmcli device set ${safeArg(this.nmManagedIface!)} managed yes 2>/dev/null || true`,
+          5000,
+        )
+        console.log(`[network] Restored NM management for ${this.nmManagedIface}`)
+      } catch { /* best-effort */ }
+    }
+
+    // SIGTERM (systemctl stop), SIGINT
+    for (const signal of ["SIGTERM", "SIGINT"] as const) {
+      process.once(signal, () => {
+        restore().finally(() => process.exit(0))
+      })
+    }
   }
 
   /** Ensure the fixed IP is always bound to the interface as secondary.
@@ -92,16 +163,15 @@ class NetworkService {
     if (this.staticIpEnsured) return
 
     const { wifiInterface, hotspotIp } = await this.getConfig()
-    const iface = escapeShellArg(wifiInterface)
 
     try {
       // Check if IP already exists on interface (exact match via word boundary)
-      const { stdout } = await execAsync(`ip -4 addr show dev ${iface}`)
+      const { stdout } = await execAsync(`ip -4 addr show dev ${safeArg(wifiInterface)}`)
       const ipRegex = new RegExp(
         `\\b${hotspotIp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
       )
       if (!ipRegex.test(stdout)) {
-        await execAsync(`sudo ip addr add ${hotspotIp}/24 dev ${iface}`)
+        await execAsync(`sudo ip addr add ${safeArg(hotspotIp)}/24 dev ${safeArg(wifiInterface)}`)
       }
       this.staticIpEnsured = true
     } catch {
@@ -237,7 +307,7 @@ class NetworkService {
         await new Promise((r) => setTimeout(r, 1000))
         try {
           const { stdout } = await execAsync(
-            `iw dev ${escapeShellArg(wifiInterface)} info 2>/dev/null`,
+            `iw dev ${safeArg(wifiInterface)} info 2>/dev/null`,
           )
           if (stdout.includes("type AP")) {
             apReady = true
@@ -257,6 +327,17 @@ class NetworkService {
       this.staticIpEnsured = false
       await this.ensureStaticIp()
       await execAsync(`sudo dnsmasq -C ${dnsmasqConfigPath}`)
+
+      // Verify dnsmasq is actually running (it daemonizes, so execAsync may not catch crashes)
+      const dnsmasqRunning = await this.verifyDnsmasqRunning()
+      if (!dnsmasqRunning) {
+        try { await execAsync("sudo killall hostapd") } catch { /* not running */ }
+        try { await fs.unlink(configPath) } catch { /* best-effort cleanup */ }
+        try { await fs.unlink(dnsmasqConfigPath) } catch { /* best-effort cleanup */ }
+        console.error("[network] dnsmasq failed to start — hotspot rolled back")
+        return
+      }
+
       await this.updateDB({ status: "HOTSPOT_ACTIVE", hotspotActive: true })
     } catch (err) {
       console.error("[network] Failed to start hotspot:", err)
@@ -290,9 +371,8 @@ class NetworkService {
 
   async scanWiFi(): Promise<WiFiNetwork[]> {
     const { wifiInterface } = await this.getConfig()
-    const escapedIface = escapeShellArg(wifiInterface)
     try {
-      const { stdout } = await execAsync(`sudo iwlist ${escapedIface} scan`, 10000)
+      const { stdout } = await execAsync(`sudo iwlist ${safeArg(wifiInterface)} scan`, 10000)
       return this.parseIwlist(stdout)
     } catch {
       return []
@@ -397,9 +477,8 @@ class NetworkService {
     iface: string,
   ): Promise<number | null> {
     try {
-      const escapedIface = escapeShellArg(iface)
       const { stdout } = await execAsync(
-        `wpa_cli -i ${escapedIface} list_networks`,
+        `wpa_cli -i ${safeArg(iface)} list_networks`,
       )
       const lines = stdout.split("\n").slice(1)
       for (const line of lines) {
@@ -425,7 +504,6 @@ class NetworkService {
     }
 
     const { wifiInterface } = await this.getConfig()
-    const escapedIface = escapeShellArg(wifiInterface)
 
     // Check if this is the currently-connected SSID
     const status = await this.getStatus()
@@ -435,16 +513,16 @@ class NetworkService {
       const networkId = await this.getWpaNetworkId(record.ssid, wifiInterface)
       if (networkId !== null) {
         await execAsync(
-          `wpa_cli -i ${escapedIface} remove_network ${networkId}`,
+          `wpa_cli -i ${safeArg(wifiInterface)} remove_network ${networkId}`,
         )
         // If this was the active connection, disconnect so the monitor
         // detects offline and starts the hotspot within ~10s
         if (isCurrentConnection) {
           try {
-            await execAsync(`wpa_cli -i ${escapedIface} disconnect`)
+            await execAsync(`wpa_cli -i ${safeArg(wifiInterface)} disconnect`)
           } catch { /* interface may already be down */ }
         }
-        await execAsync(`wpa_cli -i ${escapedIface} save_config`)
+        await execAsync(`wpa_cli -i ${safeArg(wifiInterface)} save_config`)
       }
     } catch (err) {
       console.warn(
@@ -465,7 +543,7 @@ class NetworkService {
     const status = await this.getStatus()
 
     try {
-      const { stdout } = await execAsync(`ip -4 addr show dev ${wifiInterface}`)
+      const { stdout } = await execAsync(`ip -4 addr show dev ${safeArg(wifiInterface)}`)
       const matches = [...stdout.matchAll(/inet (\d+\.\d+\.\d+\.\d+)\/\d+ scope global/g)]
       const ips = matches.map(m => m[1])
 
@@ -487,9 +565,8 @@ class NetworkService {
 
     try {
       // Capture the network ID returned by add_network
-      const escapedIface = escapeShellArg(wifiInterface)
       const { stdout: addOut } = await execAsync(
-        `wpa_cli -i ${escapedIface} add_network`,
+        `wpa_cli -i ${safeArg(wifiInterface)} add_network`,
       )
       const networkId = parseInt(addOut.trim(), 10)
       if (isNaN(networkId)) {
@@ -499,33 +576,63 @@ class NetworkService {
       if (password) {
         const escapedPwd = escapeShellArg(password)
         await execAsync(
-          `wpa_cli -i ${escapedIface} set_network ${networkId} ssid '"${escapedSSID}"'`,
+          `wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} ssid '"${escapedSSID}"'`,
         )
         await execAsync(
-          `wpa_cli -i ${escapedIface} set_network ${networkId} psk '"${escapedPwd}"'`,
+          `wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} psk '"${escapedPwd}"'`,
         )
       } else {
         await execAsync(
-          `wpa_cli -i ${escapedIface} set_network ${networkId} ssid '"${escapedSSID}"'`,
+          `wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} ssid '"${escapedSSID}"'`,
         )
         await execAsync(
-          `wpa_cli -i ${escapedIface} set_network ${networkId} key_mgmt NONE`,
+          `wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} key_mgmt NONE`,
         )
       }
 
-      await execAsync(`wpa_cli -i ${escapedIface} enable_network ${networkId}`)
-      await execAsync(`wpa_cli -i ${escapedIface} save_config`)
-      await execAsync(`wpa_cli -i ${escapedIface} reconfigure`)
+      await execAsync(`wpa_cli -i ${safeArg(wifiInterface)} enable_network ${networkId}`)
+      await execAsync(`wpa_cli -i ${safeArg(wifiInterface)} save_config`)
+      await execAsync(`wpa_cli -i ${safeArg(wifiInterface)} reconfigure`)
 
-      await new Promise((resolve) => setTimeout(resolve, 5000))
+      // Poll for DHCP-assigned IP address (up to 20s on slow networks)
+      const DHCP_MAX_WAIT_MS = 20000
+      const DHCP_POLL_INTERVAL_MS = 2000
+      const dhcpStart = Date.now()
+      let ipAddress: string | null = null
+
+      while (Date.now() - dhcpStart < DHCP_MAX_WAIT_MS) {
+        await new Promise((r) => setTimeout(r, DHCP_POLL_INTERVAL_MS))
+        try {
+          const { stdout: statusOut } = await execAsync(`wpa_cli -i ${safeArg(wifiInterface)} status`, 3000)
+          const m = statusOut.match(/ip_address=(\S+)/)
+          if (m && m[1] && m[1] !== "0.0.0.0" && !m[1].startsWith("169.254")) {
+            ipAddress = m[1]
+            break
+          }
+          // Check wpa_state — break early on terminal failure states
+          const stateMatch = statusOut.match(/wpa_state=(\S+)/)
+          if (stateMatch) {
+            const wpaState = stateMatch[1]
+            if (wpaState === "DISCONNECTED" || wpaState === "INACTIVE" || wpaState === "INTERFACE_DISABLED") {
+              break
+            }
+          }
+        } catch {
+          // wpa_cli may be unresponsive during association, keep polling
+        }
+      }
+
+      if (!ipAddress) {
+        // Best-effort: one final attempt
+        try {
+          const { stdout: fallbackOut } = await execAsync(`wpa_cli -i ${safeArg(wifiInterface)} status`, 3000)
+          ipAddress = fallbackOut.match(/ip_address=(\S+)/)?.[1] ?? null
+        } catch { }
+      }
 
       // Re-add static IP after DHCP overwrites the interface
       this.staticIpEnsured = false
       await this.ensureStaticIp()
-
-      const { stdout } = await execAsync(`wpa_cli -i ${escapedIface} status`)
-      const ipMatch = stdout.match(/ip_address=(.+)/)
-      const ipAddress = ipMatch ? ipMatch[1] : null
 
       await this.updateDB({ currentSSID: ssid, ipAddress })
 

@@ -61,11 +61,23 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // API routes: require authentication (except /api/auth which is excluded by matcher, and /api/health)
+  if (pathname.startsWith("/api/")) {
+    // Health check endpoint is public
+    if (pathname === "/api/health") {
+      return NextResponse.next()
+    }
+    if (!isAuthenticated) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    return NextResponse.next()
+  }
+
   return NextResponse.next()
 }
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/auth).*)",
   ],
 }

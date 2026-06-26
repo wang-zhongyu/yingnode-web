@@ -10,13 +10,54 @@ export function TerminalSheet() {
 
   useEffect(() => {
     if (!isOpen) return
+    const controller = new AbortController()
+    let cancelled = false
+
     async function fetchUrl() {
-      const res = await fetch("/api/terminal/token")
-      const { url } = await res.json()
-      setUrl(url)
+      try {
+        // Step 1: Request a short-lived token (credential NOT in response)
+        const tokenRes = await fetch("/api/terminal/token", { signal: controller.signal })
+        const { url: baseUrl, token } = await tokenRes.json()
+
+        if (cancelled) return
+
+        // Step 2: Exchange the token for the actual auth credential
+        const authRes = await fetch("/api/terminal/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+          signal: controller.signal,
+        })
+
+        if (cancelled) return
+
+        if (!authRes.ok) {
+          setUrl("")
+          return
+        }
+
+        const { auth } = await authRes.json()
+
+        if (cancelled) return
+
+        // Step 3: Construct the authenticated URL (with null-safety on auth)
+        if (!auth) {
+          setUrl("")
+          return
+        }
+        const authUrl = baseUrl.replace("://", `://${auth}@`)
+        setUrl(authUrl)
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return
+        setUrl("")
+      }
     }
     fetchUrl()
-    return () => setUrl("")
+    return () => {
+      cancelled = true
+      controller.abort()
+      setUrl("")
+    }
   }, [isOpen])
 
   return (
