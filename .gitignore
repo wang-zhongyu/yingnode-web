@@ -45,6 +45,7 @@ next-env.d.ts
 
 # docs (design specs are internal)
 /docs
+/.superpowers
 
 # internal agent configs (not for GitHub)
 .agents/
