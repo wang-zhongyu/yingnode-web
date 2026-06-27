@@ -287,8 +287,17 @@ install_node() {
             err "无法安装 Node.js"
         fi
     fi
-    apt-get install -y nodejs 2>/dev/null || true
-    log "Node.js $(node -v) 安装完成"
+    # Only apt-get install nodejs if nodesource path was successful (n handles its own binary)
+    if command -v node &>/dev/null; then
+        log "Node.js $(node -v) 安装完成"
+    else
+        apt-get install -y nodejs 2>/dev/null || true
+        if command -v node &>/dev/null; then
+            log "Node.js $(node -v) 安装完成"
+        else
+            err "无法安装 Node.js"
+        fi
+    fi
 }
 
 # ---- 安装网络依赖 ----
@@ -296,14 +305,21 @@ install_network_deps() {
     log "安装网络管理依赖..."
 
     if ! apt-get update 2>/dev/null; then
+        # Only apply Kali-specific mirror on Kali systems
+        . /etc/os-release 2>/dev/null || true
+        if [ "${ID:-}" != "kali" ]; then
+            err "APT 源不可用且当前系统非 Kali (${ID:-unknown})，无法自动切换镜像。请手动配置 APT 源后重试"
+        fi
         warn "默认 APT 源不可用，切换至清华镜像..."
         local kali_codename
         kali_codename=$(lsb_release -cs 2>/dev/null || echo "kali-rolling")
+        # Backup original sources.list
+        cp /etc/apt/sources.list /etc/apt/sources.list.yingnode.bak 2>/dev/null || true
         cat > /etc/apt/sources.list <<EOF
 deb https://mirrors.tuna.tsinghua.edu.cn/kali/ ${kali_codename} main contrib non-free non-free-firmware
 deb https://mirrors.tuna.tsinghua.edu.cn/kali/ ${kali_codename}-updates main contrib non-free non-free-firmware
 EOF
-        apt-get update || err "APT 源配置失败，请检查网络"
+        apt-get update || err "APT 源配置失败，请检查网络。原始配置已备份至 /etc/apt/sources.list.yingnode.bak"
     fi
 
     apt-get install -y --no-install-recommends \
@@ -348,11 +364,15 @@ deploy_app() {
     log "安装依赖..."
     if ! npm ci 2>/dev/null; then
         local fallback_registry
-        if [ "$NPM_REGISTRY" = "https://registry.npmjs.org" ]; then
-            fallback_registry="https://registry.npmmirror.com"
-        else
-            fallback_registry="https://registry.npmjs.org"
-        fi
+        case "$NPM_REGISTRY" in
+            "https://registry.npmjs.org")
+                fallback_registry="https://registry.npmmirror.com" ;;
+            "https://registry.npmmirror.com")
+                fallback_registry="https://registry.npmjs.org" ;;
+            *)
+                # Custom registry — try npmmirror first
+                fallback_registry="https://registry.npmmirror.com" ;;
+        esac
         warn "npm ci 失败，尝试切换 registry: $fallback_registry"
         npm config set registry "$fallback_registry"
         npm ci || err "npm 依赖安装失败"
