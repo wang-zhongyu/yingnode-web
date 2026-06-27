@@ -166,6 +166,38 @@ probe_http() {
     curl -fsSL --connect-timeout 3 --max-time 5 "$url" -o /dev/null 2>/dev/null
 }
 
+# ---- 自动网络检测 ----
+detect_network() {
+    log "检测网络环境..."
+
+    # --- 探测 GitHub ---
+    if probe_tcp "github.com" 443 && probe_http "https://github.com"; then
+        NET_GITHUB_OK=true
+        log "  GitHub: 可达"
+    else
+        NET_GITHUB_OK=false
+        warn "  GitHub: 不可达，将使用 Gitee 镜像"
+    fi
+
+    # --- 探测 npm registry ---
+    if probe_tcp "registry.npmjs.org" 443 && probe_http "https://registry.npmjs.org/"; then
+        NET_NPM_OK=true
+        log "  npm registry: 可达"
+    else
+        NET_NPM_OK=false
+        warn "  npm registry: 不可达，将使用 npmmirror 镜像"
+    fi
+
+    # --- 探测 APT 源 ---
+    if probe_tcp "deb.debian.org" 80; then
+        NET_APT_OK=true
+        log "  APT 源: 可达"
+    else
+        NET_APT_OK=false
+        warn "  APT 源: 不可达，将使用清华镜像"
+    fi
+}
+
 # 克隆仓库 — 使用选定的源，失败时给出明确指引
 clone_repo() {
     log "从 $REPO_URL 克隆仓库..."
