@@ -1,11 +1,6 @@
-let monitorStarted = false
+import type { NetworkService } from "@/shared/lib/network-service"
 
-async function loadHotspotLock() {
-  const { isManualHotspotLocked } = await import(
-    "@/shared/lib/hotspot-lock"
-  )
-  return isManualHotspotLocked
-}
+let monitorStarted = false
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs" && !monitorStarted) {
@@ -67,7 +62,7 @@ export async function register() {
     // Ensure the device is always reachable on the fixed IP
     await networkService.ensureStaticIp()
 
-    const isManualHotspotLocked = await loadHotspotLock()
+    const { isManualHotspotLocked } = await import("@/shared/lib/hotspot-lock")
     startNetworkMonitor(networkService, isManualHotspotLocked)
 
     // Add: start metrics collector
@@ -79,23 +74,11 @@ export async function register() {
 }
 
 function startNetworkMonitor(
-  networkService: {
-    isOnline(): Promise<boolean>
-    getStatus(): Promise<{
-      status: string
-      hotspotActive: boolean
-      lastCheck: string
-      currentSSID: string | null
-      ipAddress: string | null
-    }>
-    startHotspot(): Promise<void>
-    stopHotspot(): Promise<void>
-    updateDB(fields: Record<string, unknown>): Promise<void>
-    ensureInterfaceReady(opts?: {
-      skipApModeCheck?: boolean
-    }): Promise<{ ok: boolean; reason?: string }>
-    hasExternalIp(): Promise<boolean>
-  },
+  networkService: Pick<
+    NetworkService,
+    "isOnline" | "getStatus" | "startHotspot" | "stopHotspot" |
+    "updateDB" | "ensureInterfaceReady" | "hasExternalIp"
+  >,
   isManualHotspotLocked: () => boolean,
 ) {
   let consecutiveFailures = 0

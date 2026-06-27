@@ -6,7 +6,7 @@ import type { NetworkStatus, WiFiNetwork, ConnectResult } from "@/shared/types/n
 // Connectivity check targets — use DNS servers reachable from both China and global networks
 const PING_TARGETS = ["223.5.5.5", "114.114.114.114", "8.8.8.8"]
 
-class NetworkService {
+export class NetworkService {
   private staticIpEnsured = false
   private configCache: Awaited<ReturnType<typeof getDeviceConfig>> | null = null
   private configCacheTime: number = 0
@@ -46,7 +46,6 @@ class NetworkService {
    *  2. Switch from Monitor/Master to Managed mode (skip Master when
    *     hotspot is active — switching mode while hostapd runs can kill
    *     the AP on some drivers, and on nl80211 it fails with EBUSY)
-   *  3. Tell NetworkManager to unmanage the interface if NM is running
    *  Returns false only if the interface is missing entirely. */
   async ensureInterfaceReady(opts?: {
     skipApModeCheck?: boolean
@@ -118,20 +117,25 @@ class NetworkService {
     return { ok: true }
   }
 
-  /** Register process exit handlers to restore NM management on crash/stop. */
-  private registerNMRecovery(): void {
-    const restore = async () => {
-      if (!this.nmManagedIface) return
-      try {
-        await execAsync(
-          `sudo nmcli device set ${safeArg(this.nmManagedIface!)} managed yes 2>/dev/null || true`,
-          5000,
-        )
-        console.log(`[network] Restored NM management for ${this.nmManagedIface}`)
-      } catch { /* best-effort */ }
-    }
+  /** Tell NetworkManager to manage or unmanage the WiFi interface. */
+  private async toggleNM(managed: boolean, iface: string): Promise<void> {
+    const action = managed ? "managed yes" : "managed no"
+    try {
+      await execAsync("systemctl is-active --quiet NetworkManager")
+      await execAsync(
+        `sudo nmcli device set ${safeArg(iface)} ${action} 2>/dev/null || true`,
+      )
+    } catch { /* NetworkManager not running — ok */ }
+  }
 
-    // SIGTERM (systemctl stop), SIGINT
+  /** Register process exit handlers to restore NM management on crash/stop. */
+  private registerNMRecovery(iface: string): void {
+    if (this.nmManagedIface) return // already registered
+    this.nmManagedIface = iface
+
+    const restore = () =>
+      this.toggleNM(true, iface).catch(() => {})
+
     for (const signal of ["SIGTERM", "SIGINT"] as const) {
       process.once(signal, () => {
         restore().finally(() => process.exit(0))
@@ -247,19 +251,8 @@ class NetworkService {
     const { wifiInterface, hotspotSsid, hotspotPassword, hotspotIp } =
       await this.getConfig()
 
-    try {
-      await execAsync("systemctl is-active --quiet NetworkManager")
-      await execAsync(
-        `sudo nmcli device set ${safeArg(wifiInterface)} managed no 2>/dev/null || true`,
-      )
-      console.log(`[network] Told NetworkManager to unmanage ${wifiInterface}`)
-      if (!this.nmManagedIface) {
-        this.nmManagedIface = wifiInterface
-        this.registerNMRecovery()
-      }
-    } catch {
-      // NetworkManager not running — ok
-    }
+    await this.toggleNM(false, wifiInterface)
+    this.registerNMRecovery(wifiInterface)
 
     this.staticIpEnsured = false
     await this.ensureStaticIp()
@@ -379,13 +372,7 @@ class NetworkService {
 
     // Restore NetworkManager management for WiFi interface
     if (this.nmManagedIface) {
-      try {
-        await execAsync(
-          `sudo nmcli device set ${safeArg(this.nmManagedIface)} managed yes 2>/dev/null || true`,
-          5000,
-        )
-        console.log(`[network] Restored NM management for ${this.nmManagedIface}`)
-      } catch { /* best-effort */ }
+      await this.toggleNM(true, this.nmManagedIface)
       this.nmManagedIface = null
     }
 
