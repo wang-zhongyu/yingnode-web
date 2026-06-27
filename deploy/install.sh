@@ -268,7 +268,15 @@ install_node() {
     # nodesource 国内可能慢，使用 npmmirror 的 Node.js 二进制镜像
     if ! curl -fsSL --connect-timeout 10 "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - 2>/dev/null; then
         warn "nodesource 不可用，尝试 n 版本管理器..."
-        npm install -g n 2>/dev/null || true
+
+        # 确保 npm 可用（可能从系统包管理器安装）
+        if ! command -v npm &>/dev/null; then
+            apt-get install -y npm 2>/dev/null || true
+        fi
+
+        if command -v npm &>/dev/null; then
+            npm install -g n 2>/dev/null || true
+        fi
         if command -v n &>/dev/null; then
             if [ "${NPM_MIRROR_NODE:-false}" = true ]; then
                 N_NODE_MIRROR=https://npmmirror.com/dist/node/ n "$NODE_VERSION"
