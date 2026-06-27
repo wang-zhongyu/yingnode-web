@@ -29,11 +29,32 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
   advanced: {
     useSecureCookies: false,
-    crossSubdomainCookies: false,
+    crossSubDomainCookies: { enabled: false },
   },
-  // 客户端使用 window.location.origin 做同源请求，无需枚举所有 IP
-  trustedOrigins: [
-    "http://localhost:3000",
-    "http://172.16.42.1:3000",
-  ],
+  // 设备运行在局域网 HTTP 环境，IP 可能变化（DHCP 分配或热点 IP）
+  // 使用函数动态返回可信 origin，避免硬编码所有可能的 IP
+  trustedOrigins: (request?: Request) => {
+    const origin = request?.headers.get("origin") ?? ""
+    try {
+      const url = new URL(origin)
+      // Trust localhost
+      if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+        return [origin]
+      }
+      // Trust any private network IP (RFC 1918) over HTTP — the device is
+      // always accessed locally, never exposed to the public internet
+      if (url.protocol === "http:") {
+        const parts = url.hostname.split(".").map(Number)
+        if (parts.length === 4 && parts.every((p) => !isNaN(p) && p >= 0 && p <= 255)) {
+          // 10.0.0.0/8
+          if (parts[0] === 10) return [origin]
+          // 172.16.0.0/12
+          if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return [origin]
+          // 192.168.0.0/16
+          if (parts[0] === 192 && parts[1] === 168) return [origin]
+        }
+      }
+    } catch { /* invalid origin — reject */ }
+    return []
+  },
 })
