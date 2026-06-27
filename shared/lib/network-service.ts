@@ -115,22 +115,6 @@ class NetworkService {
       }
     }
 
-    // 3. Check for NetworkManager interference
-    try {
-      await execAsync("systemctl is-active --quiet NetworkManager")
-      await execAsync(
-        `sudo nmcli device set ${safeArg(wifiInterface)} managed no 2>/dev/null || true`,
-      )
-      console.log(`[network] Told NetworkManager to unmanage ${wifiInterface}`)
-      // Record that we took over NM management for this interface
-      if (!this.nmManagedIface) {
-        this.nmManagedIface = wifiInterface
-        this.registerNMRecovery()
-      }
-    } catch {
-      // NetworkManager not running — ok
-    }
-
     return { ok: true }
   }
 
@@ -246,18 +230,33 @@ class NetworkService {
       return
     }
 
-    this.staticIpEnsured = false
-    await this.ensureStaticIp()
-
+    // Take over WiFi interface from NetworkManager for hotspot control
+    // Only unmanage NM when actually starting hotspot — not during routine checks
     const { wifiInterface, hotspotSsid, hotspotPassword, hotspotIp } =
       await this.getConfig()
+
+    try {
+      await execAsync("systemctl is-active --quiet NetworkManager")
+      await execAsync(
+        `sudo nmcli device set ${safeArg(wifiInterface)} managed no 2>/dev/null || true`,
+      )
+      console.log(`[network] Told NetworkManager to unmanage ${wifiInterface}`)
+      if (!this.nmManagedIface) {
+        this.nmManagedIface = wifiInterface
+        this.registerNMRecovery()
+      }
+    } catch {
+      // NetworkManager not running — ok
+    }
+
+    this.staticIpEnsured = false
+    await this.ensureStaticIp()
 
     // Derive subnet from hotspot IP for DHCP range
     // e.g. 172.16.42.1 → subnet=172.16.42, range=172.16.42.10-172.16.42.50
     const subnet = hotspotIp.split(".").slice(0, 3).join(".")
 
-    // Generate dynamic hostapd config
-    let configLines = [
+    const configLines = [
       `interface=${wifiInterface}`,
       "driver=nl80211",
       `ssid=${hotspotSsid}`,
@@ -365,6 +364,18 @@ class NetworkService {
     // Keep static IP on interface so the device remains reachable
     this.staticIpEnsured = false
     await this.ensureStaticIp()
+
+    // Restore NetworkManager management for WiFi interface
+    if (this.nmManagedIface) {
+      try {
+        await execAsync(
+          `sudo nmcli device set ${safeArg(this.nmManagedIface)} managed yes 2>/dev/null || true`,
+          5000,
+        )
+        console.log(`[network] Restored NM management for ${this.nmManagedIface}`)
+      } catch { /* best-effort */ }
+      this.nmManagedIface = null
+    }
 
     await this.updateDB({ status: "ONLINE", hotspotActive: false })
   }
