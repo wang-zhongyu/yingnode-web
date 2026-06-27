@@ -440,11 +440,15 @@ install_service() {
             esac
             TTYD_URL="https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.${TTYD_ARCH}"
             TTYD_CDN="https://fastly.jsdelivr.net/gh/tsl0922/ttyd@latest/ttyd.${TTYD_ARCH}"
+            TTYD_GHPROXY="https://ghproxy.com/https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.${TTYD_ARCH}"
             if ! download "$TTYD_URL" /usr/local/bin/ttyd; then
                 warn "GitHub 下载失败，尝试 CDN 镜像..."
                 if ! download "$TTYD_CDN" /usr/local/bin/ttyd; then
-                    warn "ttyd 下载失败，跳过终端服务"
-                    return
+                    warn "CDN 下载失败，尝试 ghproxy..."
+                    if ! download "$TTYD_GHPROXY" /usr/local/bin/ttyd; then
+                        warn "ttyd 下载失败，跳过终端服务"
+                        return
+                    fi
                 fi
             fi
             chmod +x /usr/local/bin/ttyd
