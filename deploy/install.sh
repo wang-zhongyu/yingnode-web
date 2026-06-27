@@ -346,7 +346,17 @@ deploy_app() {
     fi
 
     log "安装依赖..."
-    npm ci
+    if ! npm ci 2>/dev/null; then
+        local fallback_registry
+        if [ "$NPM_REGISTRY" = "https://registry.npmjs.org" ]; then
+            fallback_registry="https://registry.npmmirror.com"
+        else
+            fallback_registry="https://registry.npmjs.org"
+        fi
+        warn "npm ci 失败，尝试切换 registry: $fallback_registry"
+        npm config set registry "$fallback_registry"
+        npm ci || err "npm 依赖安装失败"
+    fi
 
     log "生成 Prisma Client..."
     npx prisma generate
