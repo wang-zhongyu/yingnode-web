@@ -59,24 +59,30 @@ prompt() {
 # ---- 源选择 ----
 select_sources() {
     # --- 仓库源 ---
-    local repo_choice
-    repo_choice=$(prompt "REPO_SOURCE" "选择仓库源: [1]GitHub [2]Gitee 镜像" "1")
-    case "${repo_choice}" in
-        2|gitee|Gitee)
-            REPO_URL="$REPO_GITEE"
-            log "仓库源: Gitee 镜像"
-            ;;
-        *)
-            REPO_URL="$REPO_GITHUB"
-            log "仓库源: GitHub"
-            ;;
-    esac
+    # 环境变量优先
+    if [ -n "${REPO_SOURCE:-}" ]; then
+        case "${REPO_SOURCE}" in
+            gitee|Gitee)
+                REPO_URL="$REPO_GITEE"
+                log "仓库源: Gitee (环境变量)"
+                ;;
+            *)
+                REPO_URL="$REPO_GITHUB"
+                log "仓库源: GitHub (环境变量)"
+                ;;
+        esac
+    elif [ "${NET_GITHUB_OK:-true}" = false ]; then
+        REPO_URL="$REPO_GITEE"
+        log "仓库源: Gitee (自动检测)"
+    else
+        REPO_URL="$REPO_GITHUB"
+        log "仓库源: GitHub (自动检测)"
+    fi
 
     # --- npm 源 (NPM_MIRROR 环境变量优先，兼容旧用法) ---
     if [ -n "${NPM_MIRROR:-}" ]; then
         NPM_REGISTRY="$NPM_MIRROR"
         log "npm 镜像: $NPM_MIRROR (来自 NPM_MIRROR 环境变量)"
-        # 判断是否国内镜像以设置 Node.js 二进制源
         case "$NPM_MIRROR" in
             *npmmirror*|*taobao*) NPM_MIRROR_NODE=true ;;
             *) NPM_MIRROR_NODE=false ;;
@@ -84,20 +90,28 @@ select_sources() {
         return
     fi
 
-    local npm_choice
-    npm_choice=$(prompt "NPM_SOURCE" "选择 npm 源: [1]官方 [2]国内镜像 (npmmirror)" "1")
-    case "${npm_choice}" in
-        2|mirror|镜像)
-            NPM_REGISTRY="https://registry.npmmirror.com"
-            NPM_MIRROR_NODE=true
-            log "npm 源: 国内镜像"
-            ;;
-        *)
-            NPM_REGISTRY="https://registry.npmjs.org"
-            NPM_MIRROR_NODE=false
-            log "npm 源: 官方"
-            ;;
-    esac
+    if [ -n "${NPM_SOURCE:-}" ]; then
+        case "${NPM_SOURCE}" in
+            mirror|镜像)
+                NPM_REGISTRY="https://registry.npmmirror.com"
+                NPM_MIRROR_NODE=true
+                log "npm 源: 国内镜像 (环境变量)"
+                ;;
+            *)
+                NPM_REGISTRY="https://registry.npmjs.org"
+                NPM_MIRROR_NODE=false
+                log "npm 源: 官方 (环境变量)"
+                ;;
+        esac
+    elif [ "${NET_NPM_OK:-true}" = false ]; then
+        NPM_REGISTRY="https://registry.npmmirror.com"
+        NPM_MIRROR_NODE=true
+        log "npm 源: 国内镜像 (自动检测)"
+    else
+        NPM_REGISTRY="https://registry.npmjs.org"
+        NPM_MIRROR_NODE=false
+        log "npm 源: 官方 (自动检测)"
+    fi
 }
 
 # ---- 已安装检测 ----
