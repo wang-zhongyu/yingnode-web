@@ -476,6 +476,7 @@ main() {
 
     log "YingNode 一键部署开始..."
     detect_os
+    detect_network
     select_sources
 
     if check_installed; then
