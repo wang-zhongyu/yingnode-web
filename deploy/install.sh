@@ -286,7 +286,18 @@ install_node() {
 # ---- 安装网络依赖 ----
 install_network_deps() {
     log "安装网络管理依赖..."
-    apt-get update
+
+    if ! apt-get update 2>/dev/null; then
+        warn "默认 APT 源不可用，切换至清华镜像..."
+        local kali_codename
+        kali_codename=$(lsb_release -cs 2>/dev/null || echo "kali-rolling")
+        cat > /etc/apt/sources.list <<EOF
+deb https://mirrors.tuna.tsinghua.edu.cn/kali/ ${kali_codename} main contrib non-free non-free-firmware
+deb https://mirrors.tuna.tsinghua.edu.cn/kali/ ${kali_codename}-updates main contrib non-free non-free-firmware
+EOF
+        apt-get update || err "APT 源配置失败，请检查网络"
+    fi
+
     apt-get install -y --no-install-recommends \
         hostapd dnsmasq wireless-tools wpasupplicant \
         iproute2 git
