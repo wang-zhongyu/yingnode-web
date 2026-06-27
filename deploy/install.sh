@@ -218,7 +218,24 @@ clone_repo() {
     if git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" 2>/dev/null; then
         return 0
     fi
-    err "无法克隆仓库。请检查网络连接，或设置 REPO_SOURCE=gitee 使用国内镜像重试"
+
+    # 失败时尝试切换源
+    local fallback_url
+    if [ "$REPO_URL" = "$REPO_GITHUB" ]; then
+        fallback_url="$REPO_GITEE"
+        warn "GitHub 克隆失败，尝试 Gitee 镜像..."
+    else
+        fallback_url="$REPO_GITHUB"
+        warn "Gitee 克隆失败，尝试 GitHub..."
+    fi
+
+    if git clone --depth 1 "$fallback_url" "$INSTALL_DIR" 2>/dev/null; then
+        REPO_URL="$fallback_url"
+        log "使用备用源克隆成功: $fallback_url"
+        return 0
+    fi
+
+    err "无法克隆仓库。请检查网络连接后重试"
 }
 
 RED='\033[0;31m'
