@@ -94,6 +94,7 @@ function startNetworkMonitor(
     ensureInterfaceReady(opts?: {
       skipApModeCheck?: boolean
     }): Promise<{ ok: boolean; reason?: string }>
+    hasExternalIp(): Promise<boolean>
   },
   isManualHotspotLocked: () => boolean,
 ) {
@@ -135,7 +136,15 @@ function startNetworkMonitor(
           if (isManualHotspotLocked()) {
             console.log("[monitor] Hotspot locked, skipping startHotspot")
           } else {
-            await networkService.startHotspot()
+            // Safeguard: don't start hotspot if already connected to an external network
+            // (e.g. WiFi connected but ping/DNS blocked by firewall — device is still online)
+            const hasExternal = await networkService.hasExternalIp()
+            if (hasExternal) {
+              console.log("[monitor] External IP detected, skipping startHotspot")
+              consecutiveFailures = 0
+            } else {
+              await networkService.startHotspot()
+            }
           }
         }
 

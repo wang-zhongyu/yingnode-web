@@ -324,7 +324,7 @@ EOF
 
     apt-get install -y --no-install-recommends \
         hostapd dnsmasq wireless-tools wpasupplicant \
-        iproute2 git
+        iproute2 git dnsutils
 }
 
 # ---- 创建系统用户 ----
