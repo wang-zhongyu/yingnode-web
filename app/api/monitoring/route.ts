@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
-import { systemMonitor } from "@/shared/lib/system-monitor"
 
 export async function GET() {
   try {
+    const { systemMonitor } = await import("@/shared/lib/system-monitor")
     const metrics = await systemMonitor.getMetrics()
     return NextResponse.json(metrics)
   } catch (error) {

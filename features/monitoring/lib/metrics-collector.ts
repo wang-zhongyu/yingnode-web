@@ -1,6 +1,6 @@
 // features/monitoring/lib/metrics-collector.ts
+import "server-only"
 import { prisma } from "@/shared/lib/prisma"
-import { systemMonitor } from "@/shared/lib/system-monitor"
 
 let collectorStarted = false
 let collecting = false
@@ -13,6 +13,7 @@ export function startMetricsCollector(): void {
     if (collecting) return
     collecting = true
     try {
+      const { systemMonitor } = await import("@/shared/lib/system-monitor")
       const metrics = await systemMonitor.getMetrics()
 
       await prisma.metricsSnapshot.create({

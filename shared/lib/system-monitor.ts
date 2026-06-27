@@ -1,6 +1,7 @@
-import { exec } from "child_process"
-import { promisify } from "util"
-import { readFile } from "fs/promises"
+import "server-only"
+import { exec } from "node:child_process"
+import { promisify } from "node:util"
+import { readFile } from "node:fs/promises"
 import type { SystemMetrics } from "@/shared/types/monitoring"
 
 const execAsyncBase = promisify(exec)
@@ -26,7 +27,7 @@ class SystemMonitor {
   }
 
   private async getCpuUsage() {
-    const data = await readFile("/proc/stat", "utf-8")
+    const data = await readFile(/* turbopackIgnore: true */ "/proc/stat", "utf-8")
     const line = data.split("\n").find((l) => l.startsWith("cpu "))
 
     if (!line) {
@@ -57,7 +58,7 @@ class SystemMonitor {
   }
 
   private async getMemory() {
-    const data = await readFile("/proc/meminfo", "utf-8")
+    const data = await readFile(/* turbopackIgnore: true */ "/proc/meminfo", "utf-8")
     const lines = data.split("\n")
 
     const getValue = (key: string) => {
@@ -75,7 +76,7 @@ class SystemMonitor {
   }
 
   private async getDisk() {
-    const { stdout } = await execAsync("df -B1 / | tail -1")
+    const { stdout } = await execAsync(/* turbopackIgnore: true */ "df -B1 / | tail -1")
     const fields = stdout.trim().split(/\s+/)
 
     if (fields.length < 4) {
@@ -96,7 +97,7 @@ class SystemMonitor {
     ]
     for (const path of paths) {
       try {
-        const data = await readFile(path, "utf-8")
+        const data = await readFile(/* turbopackIgnore: true */ path, "utf-8")
         const millidegrees = parseInt(data.trim(), 10)
         if (!isNaN(millidegrees)) {
           return { celsius: Math.round(millidegrees / 1000) }
@@ -109,7 +110,7 @@ class SystemMonitor {
   }
 
   private async getUptime() {
-    const data = await readFile("/proc/uptime", "utf-8")
+    const data = await readFile(/* turbopackIgnore: true */ "/proc/uptime", "utf-8")
     const seconds = parseFloat(data.split(" ")[0] ?? "0")
     const days = Math.floor(seconds / 86400)
     const hours = Math.floor((seconds % 86400) / 3600)
