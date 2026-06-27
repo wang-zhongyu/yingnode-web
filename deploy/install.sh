@@ -152,6 +152,20 @@ download() {
     return 1
 }
 
+# ---- 网络探测 ----
+# TCP 端口探测（3s 超时）
+probe_tcp() {
+    local host="$1"
+    local port="$2"
+    timeout 3 bash -c "echo >/dev/tcp/${host}/${port}" 2>/dev/null
+}
+
+# HTTP 请求探测（3s 连接 + 5s 总超时）
+probe_http() {
+    local url="$1"
+    curl -fsSL --connect-timeout 3 --max-time 5 "$url" -o /dev/null 2>/dev/null
+}
+
 # 克隆仓库 — 使用选定的源，失败时给出明确指引
 clone_repo() {
     log "从 $REPO_URL 克隆仓库..."
