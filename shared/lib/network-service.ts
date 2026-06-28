@@ -759,12 +759,14 @@ export class NetworkService {
       }
 
       if (password) {
-        const escapedPwd = escapeShellArg(password)
+        // safeArg wraps in single quotes — protects ! and other special chars
+        // from bash history expansion that escapes double-quoted values
+        const safePwd = safeArg(password)
         await execAsync(
           `sudo wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} ssid '"${escapedSSID}"'`,
         )
         await execAsync(
-          `sudo wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} psk '"${escapedPwd}"'`,
+          `sudo wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} psk ${safePwd}`,
         )
       } else {
         await execAsync(
