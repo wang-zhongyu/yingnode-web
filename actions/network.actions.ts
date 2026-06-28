@@ -8,6 +8,30 @@ import { setManualHotspotLock } from "@/shared/lib/hotspot-lock"
 export const connectWiFiAction = actionClient
   .schema(manualAddSchema)
   .action(async ({ parsedInput: { ssid, password, security } }) => {
+    // If hotspot is active, stop it first — the interface must be in
+    // managed mode for wpa_cli to work (hostapd owns the interface in AP mode).
+    const status = await networkService.getStatus()
+    if (status.hotspotActive) {
+      setManualHotspotLock(true)
+      try {
+        await networkService.stopHotspot()
+        await new Promise((r) => setTimeout(r, 2000))
+        const ready = await networkService.ensureInterfaceReady()
+        if (!ready.ok) {
+          try { await networkService.startHotspot() } catch { /* best-effort */ }
+          throw new Error(`接口不可用: ${ready.reason}`)
+        }
+        const result = await networkService.connectWiFi(ssid, password, security)
+        if (!result.success) {
+          try { await networkService.startHotspot() } catch { /* best-effort */ }
+          throw new Error(result.error ?? "连接失败，热点已恢复")
+        }
+        return result
+      } finally {
+        setManualHotspotLock(false)
+      }
+    }
+
     const result = await networkService.connectWiFi(ssid, password, security)
     if (!result.success) {
       throw new Error(result.error ?? "连接失败")
