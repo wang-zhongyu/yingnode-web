@@ -5,6 +5,13 @@ import { getStatus, updateDB } from "./db-status"
 
 const HOTSPOT_RETRY_COOLDOWN_MS = 300_000 // 5 minutes
 
+/** Virtual AP interface name. On brcmfmac (Raspberry Pi 5), the main interface
+ *  (wlan0) cannot switch between managed and AP mode reliably — the driver
+ *  returns -EBUSY if any other process has the interface open. Creating a
+ *  dedicated virtual AP interface leaves wlan0 in managed mode for normal
+ *  WiFi while uap0 handles the hotspot. */
+export const HOTSPOT_IFACE = "uap0"
+
 /** Check if the yingnode dnsmasq process is running. */
 export async function verifyDnsmasqRunning(): Promise<boolean> {
   try {
@@ -33,15 +40,10 @@ export async function stopHotspot(state: NetworkServiceState): Promise<void> {
     await fs.unlink("/tmp/dnsmasq-yingnode.conf")
   } catch { /* ok */ }
 
-  // Remove static IP — hotspot is shutting down, WiFi will provide connectivity
-  try {
-    const { hotspotIp } = await state.getConfig()
-    await execAsync(
-      `sudo ip addr del ${hotspotIp}/24 dev ${safeArg(wifiInterface)}`,
-    )
-  } catch { /* non-fatal — IP may already be gone */ }
+  // Delete virtual AP interface
+  try { await execAsync(`sudo iw dev ${HOTSPOT_IFACE} del`, 3000) } catch { /* ok */ }
 
-  // Restore NM management
+  // Restore NM management on main WiFi interface
   try {
     await execAsync("systemctl is-active --quiet NetworkManager")
     await execAsync(
@@ -67,19 +69,9 @@ export async function startHotspotInternal(state: NetworkServiceState): Promise<
   console.log("[network] Starting hotspot...")
   state.lastHotspotError = null
 
-  // 1. Bring interface up and set to managed mode
+  // 1. Bring main interface up
   try {
     await execAsync(`sudo ip link set ${safeArg(wifiInterface)} up`)
-    // Switch to managed mode if in monitor/AP mode from previous state
-    try {
-      const { stdout: infoOut } = await execAsync(
-        `iw dev ${safeArg(wifiInterface)} info 2>/dev/null`,
-      )
-      if (infoOut.includes("type monitor") || infoOut.includes("type AP")) {
-        await execAsync(`sudo iw dev ${safeArg(wifiInterface)} set type managed`)
-        await new Promise((r) => setTimeout(r, 1000))
-      }
-    } catch { /* non-fatal */ }
   } catch (err) {
     state.lastHotspotError = `接口启动失败: ${(err as Error).message}`
     console.error("[network]", state.lastHotspotError)
@@ -87,34 +79,55 @@ export async function startHotspotInternal(state: NetworkServiceState): Promise<
     return
   }
 
-  // 2. Unmanage from NM so it doesn't interfere with hostapd
+  // 2. Disconnect NM + kill wpa_supplicant to release the interface.
+  //    On brcmfmac, iw dev ... interface add fails if wpa_supplicant holds it.
   try {
     await execAsync("systemctl is-active --quiet NetworkManager")
+    await execAsync(
+      `sudo nmcli device disconnect ${safeArg(wifiInterface)} 2>/dev/null || true`,
+    )
     await execAsync(
       `sudo nmcli device set ${safeArg(wifiInterface)} managed no 2>/dev/null || true`,
     )
   } catch { /* NM not running */ }
+  try { await execAsync("sudo killall wpa_supplicant", 3000) } catch { /* ok */ }
+  await new Promise((r) => setTimeout(r, 1000))
 
-  // 3. Set static IP
+  // 3. Create virtual AP interface — brcmfmac can't switch wlan0 between
+  //    managed and AP mode reliably, but supports a dedicated virtual AP.
+  const apIface = HOTSPOT_IFACE
+  try {
+    // Clean up stale uap0 from a previous crash
+    await execAsync(`sudo iw dev ${apIface} del 2>/dev/null || true`, 2000)
+    await execAsync(`sudo iw dev ${safeArg(wifiInterface)} interface add ${apIface} type __ap`)
+    console.log(`[network] Created virtual AP interface ${apIface}`)
+  } catch (err) {
+    state.lastHotspotError = `创建 AP 接口失败: ${(err as Error).message}`
+    console.error("[network]", state.lastHotspotError)
+    state.lastHotspotFailure = Date.now()
+    return
+  }
+
+  // 4. Set static IP on the virtual AP interface
   try {
     const { stdout: ipOut } = await execAsync(
-      `ip -4 addr show dev ${safeArg(wifiInterface)}`,
+      `ip -4 addr show dev ${safeArg(apIface)}`,
     )
     if (!new RegExp(`\\b${escapeRegex(hotspotIp)}\\b`).test(ipOut)) {
-      await execAsync(`sudo ip addr add ${safeArg(hotspotIp)}/24 dev ${safeArg(wifiInterface)}`)
+      await execAsync(`sudo ip addr add ${safeArg(hotspotIp)}/24 dev ${safeArg(apIface)}`)
     }
   } catch {
     console.warn("[network] Failed to set static IP — continuing anyway")
   }
 
-  // 4. Write hostapd config and start
+  // 5. Write hostapd config and start
   const subnet = hotspotIp.split(".").slice(0, 3).join(".")
   const configPath = "/tmp/hostapd-yingnode.conf"
   const dnsmasqConfigPath = "/tmp/dnsmasq-yingnode.conf"
   const fs = await import("fs/promises")
 
   const hostapdConfig = [
-    `interface=${wifiInterface}`,
+    `interface=${apIface}`,
     "driver=nl80211",
     `ssid=${hotspotSsid}`,
     "hw_mode=g",
@@ -135,7 +148,7 @@ export async function startHotspotInternal(state: NetworkServiceState): Promise<
   }
 
   const dnsmasqConfig = [
-    `interface=${wifiInterface}`,
+    `interface=${apIface}`,
     "bind-interfaces",
     "dhcp-authoritative",
     `dhcp-range=${subnet}.10,${subnet}.50,255.255.255.0,12h`,
@@ -160,7 +173,7 @@ export async function startHotspotInternal(state: NetworkServiceState): Promise<
       await new Promise((r) => setTimeout(r, 1000))
       try {
         const { stdout } = await execAsync(
-          `iw dev ${safeArg(wifiInterface)} info 2>/dev/null`,
+          `iw dev ${safeArg(apIface)} info 2>/dev/null`,
         )
         if (stdout.includes("type AP")) { apReady = true; break }
       } catch { /* keep waiting */ }
@@ -172,10 +185,10 @@ export async function startHotspotInternal(state: NetworkServiceState): Promise<
     // Re-bind IP (some drivers drop it during mode switch)
     try {
       const { stdout: ipOut2 } = await execAsync(
-        `ip -4 addr show dev ${safeArg(wifiInterface)}`,
+        `ip -4 addr show dev ${safeArg(apIface)}`,
       )
       if (!ipOut2.includes(hotspotIp)) {
-        await execAsync(`sudo ip addr add ${safeArg(hotspotIp)}/24 dev ${safeArg(wifiInterface)}`)
+        await execAsync(`sudo ip addr add ${safeArg(hotspotIp)}/24 dev ${safeArg(apIface)}`)
       }
     } catch { /* non-fatal */ }
 
@@ -201,6 +214,7 @@ export async function startHotspotInternal(state: NetworkServiceState): Promise<
     try { await execAsync("sudo killall dnsmasq") } catch { /* ok */ }
     try { await fs.unlink(configPath) } catch { /* ok */ }
     try { await fs.unlink(dnsmasqConfigPath) } catch { /* ok */ }
+    try { await execAsync(`sudo iw dev ${apIface} del`, 2000) } catch { /* ok */ }
     state.lastHotspotFailure = Date.now()
   } finally {
     if (!hotspotStarted) {
