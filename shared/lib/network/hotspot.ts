@@ -3,7 +3,7 @@ import { escapeRegex } from "./constants"
 import type { NetworkServiceState } from "./constants"
 import { getStatus, updateDB } from "./db-status"
 
-const HOTSPOT_RETRY_COOLDOWN_MS = 300_000 // 5 minutes
+const HOTSPOT_RETRY_COOLDOWN_MS = 30_000 // 30 seconds
 
 /** Virtual AP interface name. On brcmfmac (Raspberry Pi 5), the main interface
  *  (wlan0) cannot switch between managed and AP mode reliably — the driver
@@ -163,9 +163,13 @@ export async function startHotspotInternal(state: NetworkServiceState): Promise<
   try {
     await fs.writeFile(configPath, hostapdConfig.join("\n") + "\n", { mode: 0o600 })
     await fs.writeFile(dnsmasqConfigPath, dnsmasqConfig.join("\n") + "\n", { mode: 0o600 })
+    // ponytail: brief settle — fsync may not be visible to sudo child immediately
+    await new Promise((r) => setTimeout(r, 500))
 
-    // Start hostapd in background
-    await execAsync(`sudo hostapd -B ${configPath}`)
+    // Start hostapd in background. Redirect stderr — hostapd prints
+    // diagnostic messages to stderr even on success, which execAsync
+    // treats as a failure.
+    await execAsync(`sudo hostapd -B ${configPath} 2>/dev/null`)
 
     // Wait for AP mode (up to 10s)
     let apReady = false
