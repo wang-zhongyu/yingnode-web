@@ -74,6 +74,20 @@ export async function ensureInterfaceReady(
         } catch {
           // verification failed but mode switch command succeeded — continue
         }
+
+        // brcmfmac: after switching from AP/Monitor to Managed, the firmware
+        // needs a full down/up cycle to reinitialize for client-mode operations.
+        // iw set type managed alone is not sufficient — wpa_supplicant will
+        // fail to scan/associate on a stale firmware state.
+        try {
+          await execAsync(`sudo ip link set ${safeArg(wifiInterface)} down`)
+          await new Promise((r) => setTimeout(r, 500))
+          await execAsync(`sudo ip link set ${safeArg(wifiInterface)} up`)
+          await new Promise((r) => setTimeout(r, 1000))
+          console.log(`[network] Cycled ${wifiInterface} down/up to reset firmware after mode switch`)
+        } catch (cycleErr) {
+          console.warn(`[network] Failed to cycle ${wifiInterface}: ${(cycleErr as Error).message}`)
+        }
       } catch (switchErr) {
         console.error(
           `[network] Mode switch command failed for ${wifiInterface}:`,
