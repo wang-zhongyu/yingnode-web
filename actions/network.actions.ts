@@ -9,23 +9,30 @@ import { setManualHotspotLock } from "@/shared/lib/hotspot-lock"
 async function connectFromHotspotImpl(ssid: string, password: string, security: string) {
   // 1. Stop hotspot (also remanages NM and removes static IP)
   await networkService.stopHotspot()
+
+  // 2. Unmanage NM immediately — stopHotspot re-managed it, but we need
+  //    exclusive control for ensureInterfaceReady + standalone wpa_supplicant.
+  //    Without this, NM restarts its own wpa_supplicant and fights ours.
+  await networkService.unmanageNM()
   await new Promise((r) => setTimeout(r, 2000))
 
-  // 2. Bring interface to managed mode
+  // 3. Bring interface to managed mode
   const ready = await networkService.ensureInterfaceReady()
   if (!ready.ok) {
     try { await networkService.startHotspot() } catch { /* ok */ }
     throw new Error(`接口不可用: ${ready.reason}`)
   }
 
-  // 3. Connect to WiFi
+  // 4. Connect to WiFi via standalone wpa_supplicant
   const result = await networkService.connectWiFi(ssid, password, security)
   if (!result.success) {
+    // Kill standalone wpa_supplicant left by failed connectWiFi before restarting hotspot
+    try { await networkService.unmanageNM() } catch { /* ok */ }
     try { await networkService.startHotspot() } catch { /* ok */ }
     throw new Error(result.error ?? "连接失败，热点已恢复")
   }
 
-  // 4. Detect the reachable IP for user
+  // 5. Detect the reachable IP for user
   // ponytail: 1s settle — DHCP already done in connectWiFi, just routing
   await new Promise((r) => setTimeout(r, 1000))
   const reachableIp = await networkService.getReachableIp()
