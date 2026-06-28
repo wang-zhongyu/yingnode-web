@@ -244,9 +244,18 @@ export class NetworkService {
     })
   }
 
+  private lastHotspotFailure = 0
+  private static readonly HOTSPOT_RETRY_COOLDOWN_MS = 300_000 // 5 minutes
+
   async startHotspot(): Promise<void> {
     const existingStatus = await this.getStatus()
     if (existingStatus.hotspotActive) return
+
+    // Don't retry immediately after a failed attempt — give the system time
+    // to recover and avoid thrashing between NM-managed and unmanaged states
+    if (Date.now() - this.lastHotspotFailure < NetworkService.HOTSPOT_RETRY_COOLDOWN_MS) {
+      return
+    }
 
     // Ensure interface is ready before starting hostapd
     const ready = await this.ensureInterfaceReady()
@@ -308,10 +317,12 @@ export class NetworkService {
     const configPath = "/tmp/hostapd-yingnode.conf"
     const dnsmasqConfigPath = "/tmp/dnsmasq-yingnode.conf"
     const fs = await import("fs/promises")
-    await fs.writeFile(configPath, configLines.join("\n") + "\n", { mode: 0o600 })
-    await fs.writeFile(dnsmasqConfigPath, dnsmasqLines.join("\n") + "\n", { mode: 0o600 })
 
+    let hotspotStarted = false
     try {
+      await fs.writeFile(configPath, configLines.join("\n") + "\n", { mode: 0o600 })
+      await fs.writeFile(dnsmasqConfigPath, dnsmasqLines.join("\n") + "\n", { mode: 0o600 })
+
       await execAsync(`sudo hostapd -B ${configPath}`)
 
       // Wait for AP interface readiness (retry up to 10s on slow HW)
@@ -352,12 +363,21 @@ export class NetworkService {
       }
 
       await this.updateDB({ status: "HOTSPOT_ACTIVE", hotspotActive: true })
+      hotspotStarted = true
     } catch (err) {
       console.error("[network] Failed to start hotspot:", err)
       // Rollback: kill any running hostapd so we don't leak an AP with no DHCP
       try { await execAsync("sudo killall hostapd") } catch { /* not running */ }
       try { await fs.unlink(configPath) } catch { /* best-effort cleanup */ }
       try { await fs.unlink(dnsmasqConfigPath) } catch { /* best-effort cleanup */ }
+    } finally {
+      if (!hotspotStarted) {
+        // Restore NM management so the device can reconnect to external WiFi
+        this.lastHotspotFailure = Date.now()
+        await this.toggleNM(true, wifiInterface)
+        this.nmManagedIface = null
+        await this.updateDB({ status: "OFFLINE", hotspotActive: false })
+      }
     }
   }
 
