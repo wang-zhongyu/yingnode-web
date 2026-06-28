@@ -66,25 +66,32 @@ export class NetworkService {
       return { ok: false, reason: `Cannot read state of ${wifiInterface}` }
     }
 
-    // 2. Check wireless mode — must not be Monitor or Master (AP)
-    //    Skip Master check when called from monitor (hotspot may be running)
+    // 2. Check wireless mode via iw (modern replacement for deprecated iwconfig).
+    //    Must not be Monitor or Master (AP) — skip Master check when called
+    //    from monitor (hotspot may be running).
     try {
-      const { stdout: modeOutput } = await execAsync(`iwconfig ${safeArg(wifiInterface)} 2>/dev/null`)
-      const isMonitor = modeOutput.includes("Mode:Monitor")
-      const isMaster = modeOutput.includes("Mode:Master")
+      const { stdout: modeOutput } = await execAsync(
+        `iw dev ${safeArg(wifiInterface)} info 2>/dev/null`,
+      )
+      const isMonitor = modeOutput.includes("type monitor")
+      const isMaster = modeOutput.includes("type AP")
 
       if (isMonitor || (isMaster && !opts?.skipApModeCheck)) {
         const modeName = isMonitor ? "Monitor" : "AP"
         try {
-          await execAsync(`sudo iwconfig ${safeArg(wifiInterface)} mode managed`)
+          await execAsync(`sudo iw dev ${safeArg(wifiInterface)} set type managed`)
           console.log(`[network] Switched ${wifiInterface} from ${modeName} to Managed`)
           // Allow mode switch to settle before subsequent operations
           await new Promise((r) => setTimeout(r, 1000))
 
           // Verify the mode actually changed
           try {
-            const { stdout: verifyOut } = await execAsync(`iwconfig ${safeArg(wifiInterface)} 2>/dev/null`)
-            const stillBad = isMonitor ? verifyOut.includes("Mode:Monitor") : verifyOut.includes("Mode:Master")
+            const { stdout: verifyOut } = await execAsync(
+              `iw dev ${safeArg(wifiInterface)} info 2>/dev/null`,
+            )
+            const stillBad = isMonitor
+              ? verifyOut.includes("type monitor")
+              : verifyOut.includes("type AP")
             if (stillBad) {
               console.error(
                 `[network] Failed to switch ${wifiInterface} from ${modeName} to Managed — driver may not support mode change`,
@@ -103,13 +110,12 @@ export class NetworkService {
         }
       }
     } catch (err) {
-      // iwconfig itself failed — distinguish between "not wireless" and real errors
       const msg = (err as Error).message ?? ""
-      if (msg.includes("no wireless extensions")) {
+      if (msg.includes("no wireless extensions") || msg.includes("No such device")) {
         // Not a wireless interface — non-fatal
         console.log(`[network] ${wifiInterface} is not a wireless interface, skipping mode check`)
       } else {
-        console.error(`[network] iwconfig error for ${wifiInterface}:`, msg)
+        console.error(`[network] iw error for ${wifiInterface}:`, msg)
         return { ok: false, reason: `Cannot check wireless mode: ${msg}` }
       }
     }
