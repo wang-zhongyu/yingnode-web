@@ -820,23 +820,32 @@ export class NetworkService {
       const dhcpStart = Date.now()
       let ipAddress: string | null = null
 
+      let dhcpAttempts = 0
       while (Date.now() - dhcpStart < DHCP_MAX_WAIT_MS) {
         await new Promise((r) => setTimeout(r, 2000))
+        dhcpAttempts++
         try {
           const { stdout } = await execAsync(
             `sudo wpa_cli -i ${safeArg(wifiInterface)} status`, 3000,
           )
+          if (!stdout.trim()) {
+            console.error(`[network] DHCP poll #${dhcpAttempts}: wpa_cli returned empty output`)
+            continue
+          }
+          const wpaState = stdout.match(/wpa_state=(\S+)/)?.[1] ?? "?"
+          console.log(`[network] DHCP poll #${dhcpAttempts}: wpa_state=${wpaState}`)
           const m = stdout.match(/ip_address=(\S+)/)
           if (m && m[1] && m[1] !== "0.0.0.0" && !m[1].startsWith("169.254")) {
             ipAddress = m[1]
             break
           }
-          const stateMatch = stdout.match(/wpa_state=(\S+)/)
-          if (stateMatch) {
-            const s = stateMatch[1]
-            if (s === "DISCONNECTED" || s === "INACTIVE" || s === "INTERFACE_DISABLED") break
+          if (wpaState === "DISCONNECTED" || wpaState === "INACTIVE" || wpaState === "INTERFACE_DISABLED") {
+            console.error(`[network] DHCP poll #${dhcpAttempts}: wpa_state=${wpaState}, stopping poll`)
+            break
           }
-        } catch { /* keep polling */ }
+        } catch (e) {
+          console.error(`[network] DHCP poll #${dhcpAttempts}: wpa_cli error: ${(e as Error).message}`)
+        }
       }
 
       if (!ipAddress) {
