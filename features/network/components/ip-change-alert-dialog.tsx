@@ -36,7 +36,7 @@ export function IpChangeAlertDialog({
           </span>
         </div>
         <AlertDialogFooter>
-          <AlertDialogAction variant="default">知道了</AlertDialogAction>
+          <AlertDialogAction>知道了</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

@@ -751,15 +751,74 @@ export class NetworkService {
   async connectWiFi(ssid: string, password?: string, security?: string): Promise<ConnectResult> {
     const { wifiInterface } = await this.getConfig()
 
+    // Use nmcli if NM is running — it manages wpa_supplicant correctly and
+    // won't fight over the control socket like raw wpa_cli does
+    try {
+      await execAsync("systemctl is-active --quiet NetworkManager", 2000)
+
+      const securityArg = !password || security === "OPEN" ? "" : security === "WPA" ? "wpa-psk" : "wpa2-psk"
+      const cmd = password
+        ? `sudo nmcli device wifi connect ${safeArg(ssid)} password ${safeArg(password)} ifname ${safeArg(wifiInterface)}`
+        : `sudo nmcli device wifi connect ${safeArg(ssid)} ifname ${safeArg(wifiInterface)}`
+
+      console.log(`[network] nmcli connect: ssid="${ssid}"`)
+      const { stdout, stderr } = await execAsync(cmd, 30000)
+
+      // Poll for IP after nmcli connect
+      let ipAddress: string | null = null
+      for (let i = 0; i < 5; i++) {
+        await new Promise((r) => setTimeout(r, 2000))
+        try {
+          const { stdout: ipOut } = await execAsync(
+            `ip -4 addr show dev ${safeArg(wifiInterface)}`, 3000,
+          )
+          const m = ipOut.match(/inet (\d+\.\d+\.\d+\.\d+)\/\d+ scope global/)
+          if (m) {
+            const ip = m[1]
+            if (ip !== "172.16.42.1") {
+              ipAddress = ip
+              break
+            }
+          }
+        } catch { /* keep polling */ }
+      }
+
+      if (!ipAddress) {
+        const { stdout: fallbackIp } = await execAsync(
+          `ip -4 addr show dev ${safeArg(wifiInterface)}`, 3000,
+        )
+        const fm = fallbackIp.match(/inet (\d+\.\d+\.\d+\.\d+)\/\d+ scope global/)
+        if (fm) ipAddress = fm[1] !== "172.16.42.1" ? fm[1] : fm[1]
+      }
+
+      this.staticIpEnsured = false
+      await this.ensureStaticIp()
+      await this.updateDB({ currentSSID: ssid, ipAddress })
+
+      // Save record for reconnection
+      try {
+        await prisma.wiFiRecord.upsert({
+          where: { ssid },
+          update: { lastUsed: new Date() },
+          create: { ssid, security: security ?? (password ? "WPA2" : "OPEN") },
+        })
+      } catch { /* non-fatal */ }
+
+      console.log(`[network] nmcli connect OK: ssid="${ssid}" ip=${ipAddress ?? "none"}`)
+      return { success: true, ssid, ipAddress }
+    } catch (nmError) {
+      console.error(`[network] nmcli connect failed: ${(nmError as Error).message}`)
+    }
+
+    // Fallback: raw wpa_cli (for systems without NetworkManager)
+    console.log("[network] NM unavailable, trying raw wpa_cli...")
+
     // Check wpa_cli reachability before attempting connection
     try {
       await execAsync(
         `sudo wpa_cli -i ${safeArg(wifiInterface)} ping`, 3000,
       )
     } catch {
-      console.error(
-        `[network] wpa_cli unreachable on ${wifiInterface} — socket missing or interface unmanaged`,
-      )
       return { success: false, ssid: null, ipAddress: null, error: "WiFi 接口未就绪，请稍后重试" }
     }
 
@@ -924,30 +983,56 @@ export class NetworkService {
     }
   }
 
-  /** Reconnect to a previously-saved network using its wpa_supplicant network ID.
-   *  This reuses the wpa_supplicant configuration (including the saved password)
-   *  so the user does not need to re-enter credentials. */
-  async reconnectViaNetworkId(networkId: number, ssid: string): Promise<ConnectResult> {
+  /** Reconnect to a previously-saved network. Uses nmcli if NM is active,
+   *  which reuses stored connection profiles without needing the password. */
+  async reconnectViaNetworkId(_networkId: number, ssid: string): Promise<ConnectResult> {
     const { wifiInterface } = await this.getConfig()
 
+    // Try nmcli first — it has the saved connection profile
+    try {
+      await execAsync("systemctl is-active --quiet NetworkManager", 2000)
+      console.log(`[network] nmcli reconnect: ssid="${ssid}"`)
+      const { stdout } = await execAsync(
+        `sudo nmcli device wifi connect ${safeArg(ssid)} ifname ${safeArg(wifiInterface)}`, 30000,
+      )
+
+      let ipAddress: string | null = null
+      for (let i = 0; i < 5; i++) {
+        await new Promise((r) => setTimeout(r, 2000))
+        try {
+          const { stdout: ipOut } = await execAsync(
+            `ip -4 addr show dev ${safeArg(wifiInterface)}`, 3000,
+          )
+          const m = ipOut.match(/inet (\d+\.\d+\.\d+\.\d+)\/\d+ scope global/)
+          if (m && m[1] !== "172.16.42.1") { ipAddress = m[1]; break }
+        } catch { /* keep polling */ }
+      }
+
+      await this.updateDB({ currentSSID: ssid, ipAddress })
+      await prisma.wiFiRecord.update({
+        where: { ssid },
+        data: { lastUsed: new Date() },
+      }).catch(() => {})
+
+      console.log(`[network] nmcli reconnect OK: ssid="${ssid}" ip=${ipAddress ?? "none"}`)
+      return { success: true, ssid, ipAddress }
+    } catch (nmError) {
+      console.error(`[network] nmcli reconnect failed: ${(nmError as Error).message}`)
+    }
+
+    // Fallback: raw wpa_cli
     try {
       const { stdout: listOut } = await execAsync(
         `sudo wpa_cli -i ${safeArg(wifiInterface)} list_networks`, 3000,
       )
-      const hasNetwork = listOut.split("\n").some((line) => line.startsWith(`${networkId}\t`))
+      const hasNetwork = listOut.split("\n").some((line) => line.startsWith(`${_networkId}\t`))
       if (!hasNetwork) {
         return { success: false, ssid: null, ipAddress: null, error: "网络配置已失效，请重新输入密码连接" }
       }
 
-      console.log(`[network] reconnectViaNetworkId: id=${networkId} ssid="${ssid}"`)
-      await execAsync(
-        `sudo wpa_cli -i ${safeArg(wifiInterface)} enable_network ${networkId}`,
-      )
-      await execAsync(
-        `sudo wpa_cli -i ${safeArg(wifiInterface)} select_network ${networkId}`,
-      )
+      await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} enable_network ${_networkId}`)
+      await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} select_network ${_networkId}`)
 
-      // Poll for IP
       let ipAddress: string | null = null
       for (let i = 0; i < 10; i++) {
         await new Promise((r) => setTimeout(r, 2000))
@@ -964,14 +1049,12 @@ export class NetworkService {
       }
 
       await this.updateDB({ currentSSID: ssid, ipAddress })
-      try {
-        await prisma.wiFiRecord.update({
-          where: { ssid },
-          data: { lastUsed: new Date() },
-        })
-      } catch { /* non-fatal */ }
+      await prisma.wiFiRecord.update({
+        where: { ssid },
+        data: { lastUsed: new Date() },
+      }).catch(() => {})
 
-      console.log(`[network] reconnectViaNetworkId OK: ssid="${ssid}" ip=${ipAddress ?? "none"}`)
+      console.log(`[network] wpa_cli reconnect OK: ssid="${ssid}" ip=${ipAddress ?? "none"}`)
       return { success: true, ssid, ipAddress }
     } catch (error) {
       const msg = error instanceof Error ? error.message : "重连失败"
