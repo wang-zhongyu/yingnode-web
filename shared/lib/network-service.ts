@@ -191,11 +191,20 @@ export class NetworkService {
     return hasExternal
   }
 
-  /** Check if WiFi has an IP from an external network (not the hotspot IP).
-   *  Used as a safeguard: don't start hotspot if already connected to a network. */
+  /** Check if WiFi has an IP from an external network (not the hotspot IP)
+   *  AND is actually associated with an access point.
+   *  A stale DHCP IP lingering after disconnection does not count. */
   async hasExternalIp(): Promise<boolean> {
     const { wifiInterface, hotspotIp } = await this.getConfig()
     try {
+      // First verify the WiFi is actually associated with an AP.
+      // A lingering DHCP IP from a dropped connection must not fool us.
+      const { stdout: linkOut } = await execAsync(
+        `iw dev ${safeArg(wifiInterface)} link`,
+        3000,
+      )
+      if (linkOut.includes("Not connected")) return false
+
       const { stdout } = await execAsync(`ip -4 addr show dev ${safeArg(wifiInterface)}`)
       // Look for any IPv4 that is NOT the hotspot IP (172.16.42.1)
       const matches = [...stdout.matchAll(/inet (\d+\.\d+\.\d+\.\d+)\/\d+/g)]
