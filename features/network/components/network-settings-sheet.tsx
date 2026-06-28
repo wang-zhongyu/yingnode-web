@@ -58,6 +58,14 @@ export function NetworkSettingsSheet() {
               断网时自动开启，连接后关闭
             </p>
           </div>
+          {status?.hotspotError ? (
+            <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+              <p className="text-xs font-medium text-destructive">热点错误</p>
+              <p className="text-xs text-muted-foreground mt-1 font-mono">
+                {status.hotspotError}
+              </p>
+            </div>
+          ) : null}
         </div>
       </SheetContent>
     </Sheet>

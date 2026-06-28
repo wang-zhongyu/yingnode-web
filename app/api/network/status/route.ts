@@ -15,6 +15,7 @@ export async function GET() {
       hotspotSsid: config.hotspotSsid,
       hotspotIp: config.hotspotIp,
       wifiInterface: config.wifiInterface,
+      hotspotError: networkService.lastHotspotError,
     })
   } catch (error) {
     console.error("[network/status] error:", error)

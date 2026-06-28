@@ -10,6 +10,7 @@ export interface NetworkStatus {
   hotspotSsid?: string
   hotspotIp?: string
   wifiInterface?: string
+  hotspotError?: string | null
 }
 
 export interface WiFiNetwork {

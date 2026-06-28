@@ -253,6 +253,7 @@ export class NetworkService {
   private lastHotspotFailure = 0
   private static readonly HOTSPOT_RETRY_COOLDOWN_MS = 300_000 // 5 minutes
   private startingHotspot = false
+  lastHotspotError: string | null = null
 
   /** Check if WiFi interface is associated with an access point.
    *  This is the single source of truth for "connected to WiFi". */
@@ -293,6 +294,7 @@ export class NetworkService {
       await this.getConfig()
 
     console.log("[network] Starting hotspot...")
+    this.lastHotspotError = null
 
     // 1. Bring interface up and set to managed mode
     try {
@@ -308,7 +310,8 @@ export class NetworkService {
         }
       } catch { /* non-fatal */ }
     } catch (err) {
-      console.error("[network] Failed to bring interface up:", err)
+      this.lastHotspotError = `接口启动失败: ${(err as Error).message}`
+      console.error("[network]", this.lastHotspotError)
       this.lastHotspotFailure = Date.now()
       return
     }
@@ -417,9 +420,12 @@ export class NetworkService {
 
       await this.updateDB({ status: "HOTSPOT_ACTIVE", hotspotActive: true })
       hotspotStarted = true
+      this.lastHotspotError = null
       console.log("[network] Hotspot started successfully")
     } catch (err) {
-      console.error("[network] Hotspot start failed:", err)
+      const msg = (err as Error).message ?? String(err)
+      this.lastHotspotError = `热点启动失败: ${msg}`
+      console.error("[network]", this.lastHotspotError)
       // Clean up whatever we started
       try { await execAsync("sudo killall hostapd") } catch { /* ok */ }
       try { await execAsync("sudo killall dnsmasq") } catch { /* ok */ }
