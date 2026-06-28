@@ -746,74 +746,32 @@ export class NetworkService {
 
   async connectWiFi(ssid: string, password?: string, security?: string): Promise<ConnectResult> {
     const { wifiInterface } = await this.getConfig()
-    const escapedSSID = escapeShellArg(ssid)
 
     try {
-      // Capture the network ID returned by add_network
-      const { stdout: addOut } = await execAsync(
-        `wpa_cli -i ${safeArg(wifiInterface)} add_network`,
-      )
-      const networkId = parseInt(addOut.trim(), 10)
-      if (isNaN(networkId)) {
-        return { success: false, ssid: null, ipAddress: null, error: "无法创建网络配置" }
-      }
+      // Use nmcli — wpa_supplicant on Kali runs in DBus mode (-u flag),
+      // so wpa_cli per-interface sockets don't exist. nmcli talks to NM
+      // which controls wpa_supplicant via DBus.
+      let ipAddress: string | null = null
 
       if (password) {
-        const escapedPwd = escapeShellArg(password)
         await execAsync(
-          `wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} ssid '"${escapedSSID}"'`,
-        )
-        await execAsync(
-          `wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} psk '"${escapedPwd}"'`,
+          `sudo nmcli dev wifi connect ${safeArg(ssid)} password ${safeArg(password)} ifname ${safeArg(wifiInterface)}`,
+          30000,
         )
       } else {
         await execAsync(
-          `wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} ssid '"${escapedSSID}"'`,
-        )
-        await execAsync(
-          `wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} key_mgmt NONE`,
+          `sudo nmcli dev wifi connect ${safeArg(ssid)} ifname ${safeArg(wifiInterface)}`,
+          30000,
         )
       }
 
-      await execAsync(`wpa_cli -i ${safeArg(wifiInterface)} enable_network ${networkId}`)
-      await execAsync(`wpa_cli -i ${safeArg(wifiInterface)} save_config`)
-      await execAsync(`wpa_cli -i ${safeArg(wifiInterface)} reconfigure`)
-
-      // Poll for DHCP-assigned IP address (up to 20s on slow networks)
-      const DHCP_MAX_WAIT_MS = 20000
-      const DHCP_POLL_INTERVAL_MS = 2000
-      const dhcpStart = Date.now()
-      let ipAddress: string | null = null
-
-      while (Date.now() - dhcpStart < DHCP_MAX_WAIT_MS) {
-        await new Promise((r) => setTimeout(r, DHCP_POLL_INTERVAL_MS))
-        try {
-          const { stdout: statusOut } = await execAsync(`wpa_cli -i ${safeArg(wifiInterface)} status`, 3000)
-          const m = statusOut.match(/ip_address=(\S+)/)
-          if (m && m[1] && m[1] !== "0.0.0.0" && !m[1].startsWith("169.254")) {
-            ipAddress = m[1]
-            break
-          }
-          // Check wpa_state — break early on terminal failure states
-          const stateMatch = statusOut.match(/wpa_state=(\S+)/)
-          if (stateMatch) {
-            const wpaState = stateMatch[1]
-            if (wpaState === "DISCONNECTED" || wpaState === "INACTIVE" || wpaState === "INTERFACE_DISABLED") {
-              break
-            }
-          }
-        } catch {
-          // wpa_cli may be unresponsive during association, keep polling
-        }
-      }
-
-      if (!ipAddress) {
-        // Best-effort: one final attempt
-        try {
-          const { stdout: fallbackOut } = await execAsync(`wpa_cli -i ${safeArg(wifiInterface)} status`, 3000)
-          ipAddress = fallbackOut.match(/ip_address=(\S+)/)?.[1] ?? null
-        } catch { }
-      }
+      // Get the assigned IP
+      await new Promise((r) => setTimeout(r, 2000))
+      try {
+        const { stdout } = await execAsync(`ip -4 addr show dev ${safeArg(wifiInterface)}`)
+        const match = stdout.match(/inet (\d+\.\d+\.\d+\.\d+)\/\d+/)
+        if (match) ipAddress = match[1]
+      } catch { /* non-fatal */ }
 
       // Re-add static IP after DHCP overwrites the interface
       this.staticIpEnsured = false
@@ -829,20 +787,20 @@ export class NetworkService {
           create: { ssid, security: security ?? (password ? "WPA2" : "OPEN") },
         })
       } catch {
-        // Non-fatal: WiFiRecord tracking failure should not block connection flow
+        // Non-fatal
       }
 
       return { success: true, ssid, ipAddress }
     } catch (error) {
       const msg = error instanceof Error ? error.message : "连接失败"
-      if (msg.includes("WRONG_KEY")) {
+      if (msg.includes("Secrets") || msg.includes("password") || msg.includes("802.1X")) {
         return { success: false, ssid: null, ipAddress: null, error: "密码错误" }
       }
-      if (msg.includes("command not found") || msg.includes("ENOENT")) {
-        return { success: false, ssid: null, ipAddress: null, error: "wpa_cli 未安装或不可用" }
+      if (msg.includes("not found") || msg.includes("No network")) {
+        return { success: false, ssid: null, ipAddress: null, error: "未找到该网络" }
       }
       if (msg.includes("timed out") || msg.includes("ETIMEDOUT")) {
-        return { success: false, ssid: null, ipAddress: null, error: "连接超时，请确认密码正确" }
+        return { success: false, ssid: null, ipAddress: null, error: "连接超时" }
       }
       console.error("[network] connectWiFi failed:", msg)
       return { success: false, ssid: null, ipAddress: null, error: "连接失败，请重试" }

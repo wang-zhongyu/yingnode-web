@@ -16,6 +16,7 @@ export const connectWiFiAction = actionClient
       try {
         await networkService.stopHotspot()
         await new Promise((r) => setTimeout(r, 2000))
+        await networkService.remanageNM()
         const ready = await networkService.ensureInterfaceReady()
         if (!ready.ok) {
           try { await networkService.startHotspot() } catch { /* best-effort */ }

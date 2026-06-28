@@ -147,7 +147,8 @@ function startNetworkMonitor(
 
         // After 2 offline ticks (20s), unmanage NM to prevent it from
         // auto-reconnecting while we count toward hotspot start.
-        if (offlineTicks === 2) {
+        // Skip if manually locked (user-initiated WiFi connect in progress).
+        if (offlineTicks === 2 && !isManualHotspotLocked()) {
           networkService.unmanageNM().catch(() => {})
         }
 
