@@ -6,6 +6,12 @@ import type { NetworkStatus, WiFiNetwork, ConnectResult } from "@/shared/types/n
 // Connectivity check targets — use DNS servers reachable from both China and global networks
 const PING_TARGETS = ["223.5.5.5", "114.114.114.114", "8.8.8.8"]
 
+// Standalone wpa_supplicant control socket — we manage this ourselves so NM
+// doesn't interfere with the socket lifecycle during connection attempts
+const WPA_SOCKET_DIR = "/tmp/wpa-yingnode"
+const WPA_SOCKET_CLI = `-p ${WPA_SOCKET_DIR}`
+const WPA_CONFIG = "/tmp/wpa-yingnode.conf"
+
 /** Escape a string for safe use in a RegExp literal. */
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -269,6 +275,50 @@ export class NetworkService {
       }
       console.warn(`[network] wpa_supplicant socket not ready after 5s — continuing anyway`)
     } catch { /* NM not running */ }
+  }
+
+  /** Start a standalone wpa_supplicant instance with a known control socket,
+   *  independent of NetworkManager. This ensures wpa_cli commands always work
+   *  and the socket is never destroyed by NM during connection attempts. */
+  private async ensureStandaloneWpa(): Promise<void> {
+    const { wifiInterface } = await this.getConfig()
+
+    // Kill any existing system wpa_supplicant to free the interface
+    try { await execAsync("sudo killall wpa_supplicant", 3000) } catch { /* ok */ }
+
+    // Write minimal config
+    try {
+      const fs = await import("fs/promises")
+      await fs.mkdir(WPA_SOCKET_DIR, { recursive: true })
+      await fs.writeFile(
+        WPA_CONFIG,
+        `ctrl_interface=${WPA_SOCKET_DIR}\nupdate_config=1\n`,
+      )
+      // Ensure correct permissions
+      await execAsync(`sudo chmod 755 ${WPA_SOCKET_DIR}`, 2000).catch(() => {})
+      await execAsync(`sudo chmod 644 ${WPA_CONFIG}`, 2000).catch(() => {})
+    } catch { /* ok */ }
+
+    // Start standalone wpa_supplicant on the WiFi interface
+    await execAsync(
+      `sudo wpa_supplicant -B -i ${safeArg(wifiInterface)} -c ${WPA_CONFIG} -D nl80211`,
+      5000,
+    )
+
+    // Wait for control socket
+    for (let i = 0; i < 10; i++) {
+      await new Promise((r) => setTimeout(r, 500))
+      try {
+        const { stdout } = await execAsync(
+          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} ping`, 2000,
+        )
+        if (stdout.includes("PONG")) {
+          console.log(`[network] Standalone wpa_supplicant ready after ${(i + 1) * 500}ms`)
+          return
+        }
+      } catch { /* keep waiting */ }
+    }
+    console.warn("[network] Standalone wpa_supplicant not ready after 5s — continuing anyway")
   }
 
   /** Unmanage WiFi interface from NetworkManager to prevent auto-reconnect
@@ -751,76 +801,10 @@ export class NetworkService {
   async connectWiFi(ssid: string, password?: string, security?: string): Promise<ConnectResult> {
     const { wifiInterface } = await this.getConfig()
 
-    // Use nmcli if NM is running — it manages wpa_supplicant correctly and
-    // won't fight over the control socket like raw wpa_cli does
-    try {
-      await execAsync("systemctl is-active --quiet NetworkManager", 2000)
+    console.log(`[network] connectWiFi: ssid="${ssid}" via standalone wpa_supplicant`)
 
-      const securityArg = !password || security === "OPEN" ? "" : security === "WPA" ? "wpa-psk" : "wpa2-psk"
-      const cmd = password
-        ? `sudo nmcli device wifi connect ${safeArg(ssid)} password ${safeArg(password)} ifname ${safeArg(wifiInterface)}`
-        : `sudo nmcli device wifi connect ${safeArg(ssid)} ifname ${safeArg(wifiInterface)}`
-
-      console.log(`[network] nmcli connect: ssid="${ssid}"`)
-      const { stdout, stderr } = await execAsync(cmd, 30000)
-
-      // Poll for IP after nmcli connect
-      let ipAddress: string | null = null
-      for (let i = 0; i < 5; i++) {
-        await new Promise((r) => setTimeout(r, 2000))
-        try {
-          const { stdout: ipOut } = await execAsync(
-            `ip -4 addr show dev ${safeArg(wifiInterface)}`, 3000,
-          )
-          const m = ipOut.match(/inet (\d+\.\d+\.\d+\.\d+)\/\d+ scope global/)
-          if (m) {
-            const ip = m[1]
-            if (ip !== "172.16.42.1") {
-              ipAddress = ip
-              break
-            }
-          }
-        } catch { /* keep polling */ }
-      }
-
-      if (!ipAddress) {
-        const { stdout: fallbackIp } = await execAsync(
-          `ip -4 addr show dev ${safeArg(wifiInterface)}`, 3000,
-        )
-        const fm = fallbackIp.match(/inet (\d+\.\d+\.\d+\.\d+)\/\d+ scope global/)
-        if (fm) ipAddress = fm[1] !== "172.16.42.1" ? fm[1] : fm[1]
-      }
-
-      this.staticIpEnsured = false
-      await this.ensureStaticIp()
-      await this.updateDB({ currentSSID: ssid, ipAddress })
-
-      // Save record for reconnection
-      try {
-        await prisma.wiFiRecord.upsert({
-          where: { ssid },
-          update: { lastUsed: new Date() },
-          create: { ssid, security: security ?? (password ? "WPA2" : "OPEN") },
-        })
-      } catch { /* non-fatal */ }
-
-      console.log(`[network] nmcli connect OK: ssid="${ssid}" ip=${ipAddress ?? "none"}`)
-      return { success: true, ssid, ipAddress }
-    } catch (nmError) {
-      console.error(`[network] nmcli connect failed: ${(nmError as Error).message}`)
-    }
-
-    // Fallback: raw wpa_cli (for systems without NetworkManager)
-    console.log("[network] NM unavailable, trying raw wpa_cli...")
-
-    // Check wpa_cli reachability before attempting connection
-    try {
-      await execAsync(
-        `sudo wpa_cli -i ${safeArg(wifiInterface)} ping`, 3000,
-      )
-    } catch {
-      return { success: false, ssid: null, ipAddress: null, error: "WiFi 接口未就绪，请稍后重试" }
-    }
+    // Ensure standalone wpa_supplicant is running with our socket
+    await this.ensureStandaloneWpa()
 
     // ponytail: escapeShellArg handles single quotes for shell; extra replaces
     // handle chars that wpa_cli's string parser treats specially inside "..."
@@ -831,7 +815,7 @@ export class NetworkService {
     try {
       // First try wpa_cli (works when NM manages the interface on Kali)
       const { stdout: addOut } = await execAsync(
-        `sudo wpa_cli -i ${safeArg(wifiInterface)} add_network`,
+        `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} add_network`,
       )
       const networkId = parseInt(addOut.trim(), 10)
       if (isNaN(networkId)) {
@@ -843,27 +827,27 @@ export class NetworkService {
         // from bash history expansion that escapes double-quoted values
         const safePwd = safeArg(password)
         await execAsync(
-          `sudo wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} ssid '"${escapedSSID}"'`,
+          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} ssid '"${escapedSSID}"'`,
         )
         await execAsync(
-          `sudo wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} psk ${safePwd}`,
+          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} psk ${safePwd}`,
         )
       } else {
         await execAsync(
-          `sudo wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} ssid '"${escapedSSID}"'`,
+          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} ssid '"${escapedSSID}"'`,
         )
         await execAsync(
-          `sudo wpa_cli -i ${safeArg(wifiInterface)} set_network ${networkId} key_mgmt NONE`,
+          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} key_mgmt NONE`,
         )
       }
 
       console.log(`[network] wpa_cli add_network → id=${networkId}, enabling...`)
-      await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} enable_network ${networkId}`)
+      await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} enable_network ${networkId}`)
 
       // Verify connection state after enable
       try {
         const { stdout: statusOut } = await execAsync(
-          `sudo wpa_cli -i ${safeArg(wifiInterface)} status`, 3000,
+          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} status`, 3000,
         )
         const wpaState = statusOut.match(/wpa_state=(\S+)/)?.[1] ?? "?"
         console.log(`[network] post-enable wpa_state=${wpaState}`)
@@ -871,8 +855,8 @@ export class NetworkService {
 
       // save_config / reconfigure may fail on DBus-managed wpa_supplicant
       // (no writable config file) — non-fatal, network is already added
-      try { await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} save_config`) } catch { /* ok */ }
-      try { await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} reconfigure`) } catch { /* ok */ }
+      try { await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} save_config`) } catch { /* ok */ }
+      try { await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} reconfigure`) } catch { /* ok */ }
 
       // Poll for DHCP-assigned IP address (up to 20s)
       const DHCP_MAX_WAIT_MS = 20000
@@ -885,7 +869,7 @@ export class NetworkService {
         dhcpAttempts++
         try {
           const { stdout } = await execAsync(
-            `sudo wpa_cli -i ${safeArg(wifiInterface)} status`, 3000,
+            `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} status`, 3000,
           )
           if (!stdout.trim()) {
             console.error(`[network] DHCP poll #${dhcpAttempts}: wpa_cli returned empty output`)
@@ -910,7 +894,7 @@ export class NetworkService {
       if (!ipAddress) {
         try {
           const { stdout: fallback } = await execAsync(
-            `sudo wpa_cli -i ${safeArg(wifiInterface)} status`, 3000,
+            `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} status`, 3000,
           )
           ipAddress = fallback.match(/ip_address=(\S+)/)?.[1] ?? null
         } catch { /* best-effort */ }
@@ -926,7 +910,7 @@ export class NetworkService {
       let wpaStatusFull = ""
       try {
         const { stdout } = await execAsync(
-          `sudo wpa_cli -i ${safeArg(wifiInterface)} status`, 3000,
+          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} status`, 3000,
         )
         wpaStatusFull = stdout
         wpaState = stdout.match(/wpa_state=(\S+)/)?.[1] ?? "?"
@@ -983,62 +967,31 @@ export class NetworkService {
     }
   }
 
-  /** Reconnect to a previously-saved network. Uses nmcli if NM is active,
-   *  which reuses stored connection profiles without needing the password. */
+  /** Reconnect to a previously-saved network using standalone wpa_supplicant. */
   async reconnectViaNetworkId(_networkId: number, ssid: string): Promise<ConnectResult> {
     const { wifiInterface } = await this.getConfig()
 
-    // Try nmcli first — it has the saved connection profile
-    try {
-      await execAsync("systemctl is-active --quiet NetworkManager", 2000)
-      console.log(`[network] nmcli reconnect: ssid="${ssid}"`)
-      const { stdout } = await execAsync(
-        `sudo nmcli device wifi connect ${safeArg(ssid)} ifname ${safeArg(wifiInterface)}`, 30000,
-      )
+    await this.ensureStandaloneWpa()
 
-      let ipAddress: string | null = null
-      for (let i = 0; i < 5; i++) {
-        await new Promise((r) => setTimeout(r, 2000))
-        try {
-          const { stdout: ipOut } = await execAsync(
-            `ip -4 addr show dev ${safeArg(wifiInterface)}`, 3000,
-          )
-          const m = ipOut.match(/inet (\d+\.\d+\.\d+\.\d+)\/\d+ scope global/)
-          if (m && m[1] !== "172.16.42.1") { ipAddress = m[1]; break }
-        } catch { /* keep polling */ }
-      }
-
-      await this.updateDB({ currentSSID: ssid, ipAddress })
-      await prisma.wiFiRecord.update({
-        where: { ssid },
-        data: { lastUsed: new Date() },
-      }).catch(() => {})
-
-      console.log(`[network] nmcli reconnect OK: ssid="${ssid}" ip=${ipAddress ?? "none"}`)
-      return { success: true, ssid, ipAddress }
-    } catch (nmError) {
-      console.error(`[network] nmcli reconnect failed: ${(nmError as Error).message}`)
-    }
-
-    // Fallback: raw wpa_cli
     try {
       const { stdout: listOut } = await execAsync(
-        `sudo wpa_cli -i ${safeArg(wifiInterface)} list_networks`, 3000,
+        `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} list_networks`, 3000,
       )
       const hasNetwork = listOut.split("\n").some((line) => line.startsWith(`${_networkId}\t`))
       if (!hasNetwork) {
         return { success: false, ssid: null, ipAddress: null, error: "网络配置已失效，请重新输入密码连接" }
       }
 
-      await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} enable_network ${_networkId}`)
-      await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} select_network ${_networkId}`)
+      console.log(`[network] reconnectViaNetworkId: id=${_networkId} ssid="${ssid}"`)
+      await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} enable_network ${_networkId}`)
+      await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} select_network ${_networkId}`)
 
       let ipAddress: string | null = null
       for (let i = 0; i < 10; i++) {
         await new Promise((r) => setTimeout(r, 2000))
         try {
           const { stdout } = await execAsync(
-            `sudo wpa_cli -i ${safeArg(wifiInterface)} status`, 3000,
+            `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} status`, 3000,
           )
           const m = stdout.match(/ip_address=(\S+)/)
           if (m && m[1] && m[1] !== "0.0.0.0" && !m[1].startsWith("169.254")) {
@@ -1054,7 +1007,7 @@ export class NetworkService {
         data: { lastUsed: new Date() },
       }).catch(() => {})
 
-      console.log(`[network] wpa_cli reconnect OK: ssid="${ssid}" ip=${ipAddress ?? "none"}`)
+      console.log(`[network] reconnectViaNetworkId OK: ssid="${ssid}" ip=${ipAddress ?? "none"}`)
       return { success: true, ssid, ipAddress }
     } catch (error) {
       const msg = error instanceof Error ? error.message : "重连失败"
