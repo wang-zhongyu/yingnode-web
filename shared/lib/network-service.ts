@@ -838,99 +838,56 @@ export class NetworkService {
 
       console.log(`[network] wpa_cli add_network → id=${networkId}, enabling...`)
       await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} enable_network ${networkId}`)
-      // select_network forces wpa_supplicant to prioritize this network
       await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} select_network ${networkId}`)
 
-      // Verify connection state after enable
-      try {
-        const { stdout: statusOut } = await execAsync(
-          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} status`, 3000,
-        )
-        const wpaState = statusOut.match(/wpa_state=(\S+)/)?.[1] ?? "?"
-        console.log(`[network] post-enable wpa_state=${wpaState}`)
-      } catch { /* diagnostic only */ }
-
-      // save_config / reconfigure may fail on DBus-managed wpa_supplicant
-      // (no writable config file) — non-fatal, network is already added
-      try { await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} save_config`) } catch { /* ok */ }
-      try { await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} reconfigure`) } catch { /* ok */ }
-
-      // Poll for DHCP-assigned IP address (up to 20s)
-      const DHCP_MAX_WAIT_MS = 20000
-      const dhcpStart = Date.now()
-      let ipAddress: string | null = null
-
-      let dhcpAttempts = 0
-      while (Date.now() - dhcpStart < DHCP_MAX_WAIT_MS) {
+      // Wait for wpa_state COMPLETED (up to 15s)
+      let wpaState = "?"
+      for (let i = 0; i < 8; i++) {
         await new Promise((r) => setTimeout(r, 2000))
-        dhcpAttempts++
         try {
           const { stdout } = await execAsync(
             `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} status`, 3000,
           )
-          if (!stdout.trim()) {
-            console.error(`[network] DHCP poll #${dhcpAttempts}: wpa_cli returned empty output`)
-            continue
-          }
-          const wpaState = stdout.match(/wpa_state=(\S+)/)?.[1] ?? "?"
-          console.log(`[network] DHCP poll #${dhcpAttempts}: wpa_state=${wpaState}`)
-          const m = stdout.match(/ip_address=(\S+)/)
-          if (m && m[1] && m[1] !== "0.0.0.0" && !m[1].startsWith("169.254")) {
-            ipAddress = m[1]
-            break
-          }
-          if (wpaState === "DISCONNECTED" || wpaState === "INACTIVE" || wpaState === "INTERFACE_DISABLED") {
-            console.error(`[network] DHCP poll #${dhcpAttempts}: wpa_state=${wpaState}, stopping poll`)
-            break
-          }
-        } catch (e) {
-          console.error(`[network] DHCP poll #${dhcpAttempts}: wpa_cli error: ${(e as Error).message}`)
-        }
+          wpaState = stdout.match(/wpa_state=(\S+)/)?.[1] ?? "?"
+          console.log(`[network] poll #${i + 1}: wpa_state=${wpaState}`)
+          if (wpaState === "COMPLETED") break
+          if (wpaState === "DISCONNECTED" || wpaState === "INACTIVE" || wpaState === "INTERFACE_DISABLED") break
+        } catch { /* keep waiting */ }
       }
 
-      if (!ipAddress) {
-        try {
-          const { stdout: fallback } = await execAsync(
-            `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} status`, 3000,
-          )
-          ipAddress = fallback.match(/ip_address=(\S+)/)?.[1] ?? null
-        } catch { /* best-effort */ }
+      if (wpaState !== "COMPLETED") {
+        const reason = wpaState === "WRONG_KEY" ? "密码错误" :
+          wpaState === "?" ? "无法获取连接状态" :
+          `连接未完成 (${wpaState})`
+        return { success: false, ssid: null, ipAddress: null, error: reason }
       }
 
+      // Release static IP temporarily so dhcpcd can bind the DHCP address
+      const { hotspotIp } = await this.getConfig()
+      try { await execAsync(`sudo ip addr del ${hotspotIp}/24 dev ${safeArg(wifiInterface)}`) } catch { /* ok */ }
+
+      // Run dhcpcd to get DHCP IP from the WiFi router
+      let ipAddress: string | null = null
+      try {
+        await execAsync(`sudo dhcpcd -n ${safeArg(wifiInterface)}`, 15000)
+        // Read the DHCP-assigned IP
+        const { stdout: ipOut } = await execAsync(
+          `ip -4 addr show dev ${safeArg(wifiInterface)}`, 3000,
+        )
+        const m = ipOut.match(/inet (\d+\.\d+\.\d+\.\d+)\/\d+ scope global(?!.*secondary)/)
+        const allIps = [...ipOut.matchAll(/inet (\d+\.\d+\.\d+\.\d+)\/\d+/g)].map(m => m[1])
+        ipAddress = allIps.find(ip => ip !== hotspotIp) ?? null
+      } catch (e) {
+        console.warn(`[network] dhcpcd failed: ${(e as Error).message}`)
+      }
+
+      // Re-add static IP so device is always reachable at 172.16.42.1
       this.staticIpEnsured = false
       await this.ensureStaticIp()
 
       await this.updateDB({ currentSSID: ssid, ipAddress })
 
-      // Check if wpa_supplicant actually associated
-      let wpaState = "?"
-      let wpaStatusFull = ""
-      try {
-        const { stdout } = await execAsync(
-          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} status`, 3000,
-        )
-        wpaStatusFull = stdout
-        wpaState = stdout.match(/wpa_state=(\S+)/)?.[1] ?? "?"
-      } catch (e) { /* diagnostic only */ }
-
-      if (wpaState !== "COMPLETED") {
-        console.error(
-          `[network] connectWiFi: wpa_state=${wpaState} — association failed\n` +
-          `  wpa_cli status: ${wpaStatusFull.slice(0, 200) || "no output"}`,
-        )
-        const reason = wpaState === "?" ? "无法获取连接状态" :
-          wpaState === "WRONG_KEY" ? "密码错误" :
-          wpaState === "SCANNING" ? "正在扫描中" :
-          wpaState === "DISCONNECTED" ? "连接已断开" :
-          `连接未完成 (${wpaState})`
-        return { success: false, ssid: null, ipAddress: null, error: reason }
-      }
-
-      if (!ipAddress) {
-        console.error("[network] connectWiFi: associated but no DHCP IP — device reachable at static IP only")
-      }
-
-      // ponytail: save wpa_supplicant networkId so reconnection can reuse it
+      // Save record for reconnection
       try {
         await prisma.wiFiRecord.upsert({
           where: { ssid },
