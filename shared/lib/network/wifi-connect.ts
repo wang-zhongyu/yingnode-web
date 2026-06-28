@@ -75,13 +75,15 @@ export async function connectWiFi(
     }
 
     if (password) {
-      // safeArg wraps in single quotes — protects ! and other special chars
-      const safePwd = safeArg(password)
+      // ponytail: wpa_cli needs PSK double-quoted to handle ! and other special
+      // chars. safeArg wraps in shell single-quotes, and the inner double quotes
+      // tell wpa_cli to treat the value as a quoted string.
+      const wpaSafePwd = safeArg(`"${password.replace(/["\\]/g, "\\$&")}"`)
       await execAsync(
         `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} ssid ${ssidHex}`,
       )
       await execAsync(
-        `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} psk ${safePwd}`,
+        `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} psk ${wpaSafePwd}`,
       )
     } else {
       await execAsync(
@@ -95,34 +97,15 @@ export async function connectWiFi(
     console.log(`[network] wpa_cli add_network → id=${networkId}, enabling...`)
     await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} enable_network ${networkId}`)
     await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} select_network ${networkId}`)
-    // ponytail: brcmfmac (RPi WiFi) — select_network does not trigger auto-scan.
-    // Run an explicit scan and wait for it to finish, then reassociate to force
-    // the connection handshake with the selected network.
+    // ponytail: brcmfmac (RPi WiFi) may not auto-scan after select_network.
+    // Explicit scan as safety net; FAIL-BUSY means auto-scan already running.
     try {
       await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} scan`, 3000)
-    } catch { /* FAIL-BUSY = auto-scan already running — that's fine */ }
-    // Poll until scan completes (wpa_state stops being SCANNING, up to 6s)
-    for (let i = 0; i < 6; i++) {
-      await new Promise((r) => setTimeout(r, 1000))
-      try {
-        const { stdout } = await execAsync(
-          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} status`, 3000,
-        )
-        const s = stdout.match(/wpa_state=(\S+)/)?.[1] ?? "?"
-        if (s !== "SCANNING") {
-          console.log(`[network] scan done in ${(i + 1)}s, state=${s}`)
-          break
-        }
-      } catch { /* keep waiting */ }
-    }
-    // Force association — on brcmfmac, scan results don't auto-trigger connection
-    try {
-      await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} reassociate`, 3000)
-    } catch { /* non-fatal */ }
+    } catch { /* FAIL-BUSY is fine */ }
 
-    // Wait for wpa_state COMPLETED (up to 10s)
+    // Wait for wpa_state COMPLETED (up to 16s)
     let wpaState = "?"
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
       await new Promise((r) => setTimeout(r, 2000))
       try {
         const { stdout } = await execAsync(
@@ -131,6 +114,8 @@ export async function connectWiFi(
         wpaState = stdout.match(/wpa_state=(\S+)/)?.[1] ?? "?"
         console.log(`[network] poll #${i + 1}: wpa_state=${wpaState}`)
         if (wpaState === "COMPLETED") break
+        // DISCONNECTED = handshake failed (wrong key) — terminal.
+        // INTERFACE_DISABLED = driver failure — terminal.
         if (wpaState === "DISCONNECTED" || wpaState === "INTERFACE_DISABLED") break
       } catch { /* keep waiting */ }
     }
