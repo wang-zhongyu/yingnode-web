@@ -252,6 +252,22 @@ export class NetworkService {
         `sudo nmcli device set ${safeArg(wifiInterface)} managed yes 2>/dev/null || true`,
       )
       console.log(`[network] NM remanaged ${wifiInterface}`)
+
+      // ponytail: wait for wpa_supplicant control socket — NM creates it
+      // asynchronously after managing the interface. Without this, wpa_cli
+      // fails with "No such file or directory".
+      const socketPath = `/run/wpa_supplicant/${wifiInterface}`
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 500))
+        try {
+          const { stdout } = await execAsync(`test -S ${socketPath} && echo ready`, 2000)
+          if (stdout.includes("ready")) {
+            console.log(`[network] wpa_supplicant socket ready after ${(i + 1) * 500}ms`)
+            return
+          }
+        } catch { /* socket not ready yet */ }
+      }
+      console.warn(`[network] wpa_supplicant socket not ready after 5s — continuing anyway`)
     } catch { /* NM not running */ }
   }
 
