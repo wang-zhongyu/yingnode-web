@@ -2,7 +2,13 @@ import { createSafeActionClient } from "next-safe-action"
 import { auth } from "@/shared/lib/auth"
 import { headers } from "next/headers"
 
-export const actionClient = createSafeActionClient()
+export const actionClient = createSafeActionClient({
+  // ponytail: expose server error messages to the client — the device is
+  // accessed locally over LAN, no risk of leaking sensitive internals
+  handleReturnedServerError(e: Error) {
+    return e.message
+  },
+})
 
 // ponytail: authenticated action client — checks session before executing
 export const authActionClient = actionClient.use(async ({ next }) => {
