@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma"
 import { getDeviceConfig } from "@/shared/lib/device-config"
-import { execAsync, escapeShellArg, safeArg } from "@/shared/lib/shell"
+import { execAsync, safeArg } from "@/shared/lib/shell"
 import type { NetworkStatus, WiFiNetwork, ConnectResult } from "@/shared/types/network"
 
 // Connectivity check targets — use DNS servers reachable from both China and global networks
@@ -806,14 +806,10 @@ export class NetworkService {
     // Ensure standalone wpa_supplicant is running with our socket
     await this.ensureStandaloneWpa()
 
-    // ponytail: escapeShellArg handles single quotes for shell; extra replaces
-    // handle chars that wpa_cli's string parser treats specially inside "..."
-    const escapedSSID = escapeShellArg(ssid)
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
+    // Use hex-encoded SSID — avoids all shell/wpa_cli quoting issues
+    const ssidHex = Buffer.from(ssid, "utf-8").toString("hex")
 
     try {
-      // First try wpa_cli (works when NM manages the interface on Kali)
       const { stdout: addOut } = await execAsync(
         `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} add_network`,
       )
@@ -824,17 +820,16 @@ export class NetworkService {
 
       if (password) {
         // safeArg wraps in single quotes — protects ! and other special chars
-        // from bash history expansion that escapes double-quoted values
         const safePwd = safeArg(password)
         await execAsync(
-          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} ssid '"${escapedSSID}"'`,
+          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} ssid ${ssidHex}`,
         )
         await execAsync(
           `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} psk ${safePwd}`,
         )
       } else {
         await execAsync(
-          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} ssid '"${escapedSSID}"'`,
+          `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} ssid ${ssidHex}`,
         )
         await execAsync(
           `sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} set_network ${networkId} key_mgmt NONE`,
@@ -843,6 +838,8 @@ export class NetworkService {
 
       console.log(`[network] wpa_cli add_network → id=${networkId}, enabling...`)
       await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} enable_network ${networkId}`)
+      // select_network forces wpa_supplicant to prioritize this network
+      await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} select_network ${networkId}`)
 
       // Verify connection state after enable
       try {
