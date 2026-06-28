@@ -5,89 +5,55 @@ import { manualAddSchema, connectFromHotspotSchema } from "@/features/network/sc
 import { networkService } from "@/shared/lib/network-service"
 import { setManualHotspotLock } from "@/shared/lib/hotspot-lock"
 
+async function connectFromHotspotImpl(ssid: string, password: string, security: string) {
+  // 1. Stop hotspot and wait for AP teardown
+  await networkService.stopHotspot()
+  await new Promise((r) => setTimeout(r, 3000))
+
+  // 2. Remanage NM so wpa_supplicant control socket is available
+  await networkService.remanageNM()
+
+  // 3. Bring interface UP (stopHotspot may have left it in transitional state)
+  const ready = await networkService.ensureInterfaceReady()
+  if (!ready.ok) {
+    try { await networkService.startHotspot() } catch { /* ok */ }
+    throw new Error(`接口不可用: ${ready.reason}`)
+  }
+
+  // 4. Connect — wpa_cli with sudo now works because NM manages the interface
+  const result = await networkService.connectWiFi(ssid, password, security)
+  if (!result.success) {
+    try { await networkService.startHotspot() } catch { /* ok */ }
+    throw new Error(result.error ?? "连接失败，热点已恢复")
+  }
+
+  return result
+}
+
 export const connectWiFiAction = actionClient
   .schema(manualAddSchema)
   .action(async ({ parsedInput: { ssid, password, security } }) => {
-    // If hotspot is active, stop it first — the interface must be in
-    // managed mode for wpa_cli to work (hostapd owns the interface in AP mode).
     const status = await networkService.getStatus()
-    if (status.hotspotActive) {
-      setManualHotspotLock(true)
-      try {
-        await networkService.stopHotspot()
-        await new Promise((r) => setTimeout(r, 2000))
-        await networkService.remanageNM()
-        const ready = await networkService.ensureInterfaceReady()
-        if (!ready.ok) {
-          try { await networkService.startHotspot() } catch { /* best-effort */ }
-          throw new Error(`接口不可用: ${ready.reason}`)
-        }
-        const result = await networkService.connectWiFi(ssid, password, security)
-        if (!result.success) {
-          try { await networkService.startHotspot() } catch { /* best-effort */ }
-          throw new Error(result.error ?? "连接失败，热点已恢复")
-        }
-        return result
-      } finally {
-        setManualHotspotLock(false)
-      }
+    if (!status.hotspotActive) {
+      const result = await networkService.connectWiFi(ssid, password, security)
+      if (!result.success) throw new Error(result.error ?? "连接失败")
+      return result
     }
 
-    const result = await networkService.connectWiFi(ssid, password, security)
-    if (!result.success) {
-      throw new Error(result.error ?? "连接失败")
+    setManualHotspotLock(true)
+    try {
+      return await connectFromHotspotImpl(ssid, password ?? "", security)
+    } finally {
+      setManualHotspotLock(false)
     }
-    return result
   })
 
 export const connectFromHotspotAction = actionClient
   .schema(connectFromHotspotSchema)
   .action(async ({ parsedInput: { ssid, password, security } }) => {
-    // Prevent monitor from auto-starting hotspot during this operation
     setManualHotspotLock(true)
-
     try {
-      // 1. Stop hotspot
-      await networkService.stopHotspot()
-
-      // 2. Allow interface to leave AP mode (hostapd teardown is async)
-      await new Promise((r) => setTimeout(r, 2000))
-
-      // 3. Ensure interface is in managed mode and ready for wpa_cli
-      const ready = await networkService.ensureInterfaceReady()
-      if (!ready.ok) {
-        try { await networkService.startHotspot() } catch { /* best-effort */ }
-        throw new Error(`接口不可用: ${ready.reason}`)
-      }
-
-      // 4. Connect to the user-specified WiFi network
-      const result = await networkService.connectWiFi(ssid, password, security)
-      if (!result.success) {
-        try { await networkService.startHotspot() } catch { /* best-effort */ }
-        throw new Error(result.error ?? "连接失败，热点已恢复")
-      }
-
-      // 5. Verify internet connectivity with retries
-      let online = false
-      for (let i = 0; i < 3; i++) {
-        await new Promise((r) => setTimeout(r, 3000))
-        online = await networkService.isOnline()
-        if (online) break
-      }
-
-      if (!online) {
-        try { await networkService.startHotspot() } catch { /* best-effort */ }
-        throw new Error("已连接到网络但无法访问互联网，热点已恢复")
-      }
-
-      return result
-    } catch (error) {
-      // If we already threw, re-throw so onError receives the message
-      if (error instanceof Error && error.message !== "操作失败，热点已恢复") {
-        // Try to restore hotspot for any unexpected error
-        try { await networkService.startHotspot() } catch { /* best-effort */ }
-      }
-      throw error
+      return await connectFromHotspotImpl(ssid, password ?? "", security)
     } finally {
       setManualHotspotLock(false)
     }

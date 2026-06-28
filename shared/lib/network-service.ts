@@ -776,8 +776,10 @@ export class NetworkService {
       }
 
       await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} enable_network ${networkId}`)
-      await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} save_config`)
-      await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} reconfigure`)
+      // save_config / reconfigure may fail on DBus-managed wpa_supplicant
+      // (no writable config file) — non-fatal, network is already added
+      try { await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} save_config`) } catch { /* ok */ }
+      try { await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} reconfigure`) } catch { /* ok */ }
 
       // Poll for DHCP-assigned IP address (up to 20s)
       const DHCP_MAX_WAIT_MS = 20000
@@ -837,8 +839,13 @@ export class NetworkService {
       if (msg.includes("timed out") || msg.includes("ETIMEDOUT")) {
         return { success: false, ssid: null, ipAddress: null, error: "连接超时" }
       }
-      console.error("[network] connectWiFi failed:", msg)
-      return { success: false, ssid: null, ipAddress: null, error: "连接失败，请重试" }
+      // Extract wpa_cli stderr for diagnostics
+      let detail = ""
+      if (error instanceof Error && "stderr" in error) {
+        detail = (error as { stderr?: string }).stderr ?? ""
+      }
+      console.error(`[network] connectWiFi failed: ${msg}${detail ? ` | stderr: ${detail}` : ""}`)
+      return { success: false, ssid: null, ipAddress: null, error: `连接失败: ${msg.slice(0, 80)}` }
     }
   }
 }
