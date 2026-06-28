@@ -29,7 +29,8 @@ export function ManualAddDialog() {
       router.refresh()
     },
     onError({ error }) {
-      toast.error(error.serverError ?? "连接失败")
+      console.error("[manualAdd] connectWiFi error:", error)
+      toast.error(error.serverError || error.validationErrors?._errors?.[0] || "连接失败")
     },
   })
 

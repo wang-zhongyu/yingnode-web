@@ -40,7 +40,8 @@ export function ConnectFromHotspotDialog() {
       close()
     },
     onError({ error }) {
-      toast.error(error.serverError ?? "连接失败，请重试")
+      console.error("[connectFromHotspot] error:", error)
+      toast.error(error.serverError || error.validationErrors?._errors?.[0] || "连接失败，请重试")
     },
   })
 

@@ -40,7 +40,8 @@ export function NetworkPopover() {
       }
     },
     onError({ error }) {
-      toast.error(error.serverError ?? "连接失败")
+      console.error("[popover] connectWiFi error:", error)
+      toast.error(error.serverError || error.validationErrors?._errors?.[0] || "连接失败")
     },
   })
 

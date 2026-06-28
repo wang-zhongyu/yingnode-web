@@ -855,16 +855,26 @@ export class NetworkService {
 
       // Check if wpa_supplicant actually associated
       let wpaState = "?"
+      let wpaStatusFull = ""
       try {
         const { stdout } = await execAsync(
           `sudo wpa_cli -i ${safeArg(wifiInterface)} status`, 3000,
         )
+        wpaStatusFull = stdout
         wpaState = stdout.match(/wpa_state=(\S+)/)?.[1] ?? "?"
-      } catch { /* diagnostic only */ }
+      } catch (e) { /* diagnostic only */ }
 
       if (wpaState !== "COMPLETED") {
-        console.error(`[network] connectWiFi: wpa_state=${wpaState} — association failed`)
-        return { success: false, ssid: null, ipAddress: null, error: `WiFi 连接未完成 (${wpaState})` }
+        console.error(
+          `[network] connectWiFi: wpa_state=${wpaState} — association failed\n` +
+          `  wpa_cli status: ${wpaStatusFull.slice(0, 200) || "no output"}`,
+        )
+        const reason = wpaState === "?" ? "无法获取连接状态" :
+          wpaState === "WRONG_KEY" ? "密码错误" :
+          wpaState === "SCANNING" ? "正在扫描中" :
+          wpaState === "DISCONNECTED" ? "连接已断开" :
+          `连接未完成 (${wpaState})`
+        return { success: false, ssid: null, ipAddress: null, error: reason }
       }
 
       if (!ipAddress) {
