@@ -77,7 +77,7 @@ function startNetworkMonitor(
   networkService: Pick<
     NetworkService,
     "isWiFiAssociated" | "checkConnectivity" | "getStatus" |
-    "startHotspot" | "stopHotspot" | "updateDB"
+    "startHotspot" | "stopHotspot" | "updateDB" | "unmanageNM"
   >,
   isManualHotspotLocked: () => boolean,
 ) {
@@ -105,7 +105,11 @@ function startNetworkMonitor(
       }
 
       if (associated) {
-        // WiFi is connected to an AP — verify internet access
+        // WiFi is connected to an AP — verify internet access.
+        // Restore NM management in case it was unmanaged by a prior offline tick.
+        if (offlineTicks > 0) {
+          networkService.updateDB({ status: "ONLINE" }).catch(() => {})
+        }
         offlineTicks = 0
         const pingOk = await networkService.checkConnectivity()
 
@@ -129,6 +133,12 @@ function startNetworkMonitor(
         // WiFi is NOT connected to any AP
         onlineTicks = 0
         offlineTicks++
+
+        // On first offline tick, unmanage NM to prevent it from
+        // auto-reconnecting while we count offlineTicks toward hotspot.
+        if (offlineTicks === 1) {
+          networkService.unmanageNM().catch(() => {})
+        }
 
         if (!status.hotspotActive && offlineTicks >= 3) {
           if (isManualHotspotLocked()) {

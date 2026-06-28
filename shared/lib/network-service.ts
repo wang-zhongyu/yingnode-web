@@ -255,6 +255,19 @@ export class NetworkService {
   private startingHotspot = false
   lastHotspotError: string | null = null
 
+  /** Unmanage WiFi interface from NetworkManager to prevent auto-reconnect
+   *  while counting offline ticks toward hotspot start. */
+  async unmanageNM(): Promise<void> {
+    const { wifiInterface } = await this.getConfig()
+    try {
+      await execAsync("systemctl is-active --quiet NetworkManager")
+      await execAsync(
+        `sudo nmcli device set ${safeArg(wifiInterface)} managed no 2>/dev/null || true`,
+      )
+      console.log(`[network] NM unmanaged ${wifiInterface}`)
+    } catch { /* NM not running */ }
+  }
+
   /** Check if WiFi interface is associated with an access point.
    *  This is the single source of truth for "connected to WiFi". */
   async isWiFiAssociated(): Promise<boolean> {
