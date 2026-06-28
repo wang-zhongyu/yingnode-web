@@ -41,9 +41,15 @@ export const connectWiFiAction = actionClient
     )
     if (!status.hotspotActive) {
       console.log("[action] → direct connectWiFi path")
-      const result = await networkService.connectWiFi(ssid, password, security)
-      if (!result.success) throw new Error(result.error ?? "连接失败")
-      return result
+      // Lock to prevent monitor from starting hotspot mid-connection
+      setManualHotspotLock(true)
+      try {
+        const result = await networkService.connectWiFi(ssid, password, security)
+        if (!result.success) throw new Error(result.error ?? "连接失败")
+        return result
+      } finally {
+        setManualHotspotLock(false)
+      }
     }
 
     console.log("[action] → connectFromHotspotImpl path")
