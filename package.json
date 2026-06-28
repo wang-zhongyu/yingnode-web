@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "mkdir -p .next/standalone/.next && cp -r .next/static .next/standalone/.next/static && cp .env .next/standalone/.env",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
