@@ -63,10 +63,7 @@ export function NetworkPopover() {
   function renderNetworkList() {
     if (scanning) return <SpinnerEmpty message="正在扫描网络..." />
     if (networks.length === 0) {
-      const message = effectiveStatus.hotspotActive
-        ? "热点模式下无法扫描网络"
-        : "未发现可用网络"
-      return <ListEmpty message={message} />
+      return <ListEmpty message="未发现可用网络" />
     }
     return (
       <>
