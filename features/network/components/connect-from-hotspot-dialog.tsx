@@ -15,7 +15,7 @@ import type { ManualAddInput } from "../schemas/network.schema"
 import { useAction } from "next-safe-action/hooks"
 import { connectFromHotspotAction } from "@/actions/network.actions"
 import { toast } from "sonner"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, ExternalLink } from "lucide-react"
 
 export function ConnectFromHotspotDialog() {
   const { type, isOpen, close } = useModalStore()
@@ -23,7 +23,20 @@ export function ConnectFromHotspotDialog() {
   const { execute, isPending } = useAction(connectFromHotspotAction, {
     onSuccess({ data }) {
       if (!data) return
-      toast.success(`已连接到 "${data.ssid}"`)
+      const extra = data as unknown as Record<string, unknown>
+      const ip = (extra.reachableIp as string | undefined) ?? data.ipAddress
+      if (ip) {
+        toast.success(`已连接到 "${data.ssid}"`, {
+          description: `新访问地址: http://${ip}:3000`,
+          duration: 10_000,
+          action: {
+            label: "复制",
+            onClick: () => navigator.clipboard.writeText(`http://${ip}:3000`),
+          },
+        })
+      } else {
+        toast.success(`已连接到 "${data.ssid}"`)
+      }
       close()
     },
     onError({ error }) {

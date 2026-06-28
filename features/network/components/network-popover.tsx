@@ -23,8 +23,21 @@ export function NetworkPopover() {
   const [statusError, setStatusError] = useState(false)
   const openModal = useModalStore((s) => s.open)
   const { execute } = useAction(connectWiFiAction, {
-    onSuccess() {
+    onSuccess({ data }) {
       fetchStatus()
+      // ponytail: show new IP when connecting from hotspot (reachableIp only set there)
+      const extra = data as unknown as Record<string, unknown> | null
+      const reachableIp = extra?.reachableIp as string | undefined
+      if (reachableIp) {
+        toast.success("已连接，请使用新地址访问", {
+          description: `http://${reachableIp}:3000`,
+          duration: 10_000,
+          action: {
+            label: "复制",
+            onClick: () => navigator.clipboard.writeText(`http://${reachableIp}:3000`),
+          },
+        })
+      }
     },
     onError({ error }) {
       toast.error(error.serverError ?? "连接失败")

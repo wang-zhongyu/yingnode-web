@@ -27,7 +27,11 @@ async function connectFromHotspotImpl(ssid: string, password: string, security: 
     throw new Error(result.error ?? "连接失败，热点已恢复")
   }
 
-  return result
+  // 5. Wait for DHCP to fully settle, then detect the reachable IP
+  await new Promise((r) => setTimeout(r, 3000))
+  const reachableIp = await networkService.getReachableIp()
+
+  return { ...result, reachableIp }
 }
 
 export const connectWiFiAction = actionClient
