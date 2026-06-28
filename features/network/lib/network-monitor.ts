@@ -10,7 +10,7 @@ export function startNetworkMonitor(
     "isWiFiAssociated" | "getStatus" |
     "startHotspot" | "stopHotspot"
   >,
-  isManualHotspotLocked: () => boolean,
+  isManualHotspotLocked: () => Promise<boolean>,
 ) {
   let lastToggleTime = 0
   let checking = false
@@ -36,7 +36,7 @@ export function startNetworkMonitor(
       }
 
       if (!associated && !status.hotspotActive) {
-        if (isManualHotspotLocked()) {
+        if (await isManualHotspotLocked()) {
           console.log("[monitor] Manual lock engaged, skipping startHotspot")
         } else {
           console.log("[monitor] WiFi not associated → starting hotspot")
@@ -46,7 +46,7 @@ export function startNetworkMonitor(
       }
 
       if (associated && status.hotspotActive) {
-        if (isManualHotspotLocked()) {
+        if (await isManualHotspotLocked()) {
           console.log("[monitor] Manual lock engaged, skipping stopHotspot")
         } else {
           console.log("[monitor] WiFi associated → stopping hotspot")

@@ -11,6 +11,7 @@ model NetworkStatus {
   id            Int      @id @default(autoincrement())
   status        String   @default("ONLINE")
   hotspotActive Boolean  @default(false)
+  manualLock    Boolean  @default(false)
   lastCheck     DateTime @default(now())
   currentSSID   String?
   ipAddress     String?

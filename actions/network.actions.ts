@@ -50,33 +50,33 @@ export const connectWiFiAction = actionClient
     if (!status.hotspotActive) {
       console.log("[action] → direct connectWiFi path")
       // Lock to prevent monitor from starting hotspot mid-connection
-      setManualHotspotLock(true)
+      await setManualHotspotLock(true)
       try {
         const result = await networkService.connectWiFi(ssid, password, security)
         if (!result.success) throw new Error(result.error ?? "连接失败")
         return result
       } finally {
-        setManualHotspotLock(false)
+        await setManualHotspotLock(false)
       }
     }
 
     console.log("[action] → connectFromHotspotImpl path")
-    setManualHotspotLock(true)
+    await setManualHotspotLock(true)
     try {
       return await connectFromHotspotImpl(ssid, password ?? "", security)
     } finally {
-      setManualHotspotLock(false)
+      await setManualHotspotLock(false)
     }
   })
 
 export const connectFromHotspotAction = actionClient
   .schema(manualAddSchema)
   .action(async ({ parsedInput: { ssid, password, security } }) => {
-    setManualHotspotLock(true)
+    await setManualHotspotLock(true)
     try {
       return await connectFromHotspotImpl(ssid, password ?? "", security)
     } finally {
-      setManualHotspotLock(false)
+      await setManualHotspotLock(false)
     }
   })
 

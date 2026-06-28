@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  setManualHotspotLock(true)
+  await setManualHotspotLock(true)
 
   try {
     // 1. Stop hotspot (also remanages NM)
@@ -55,6 +55,6 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     )
   } finally {
-    setManualHotspotLock(false)
+    await setManualHotspotLock(false)
   }
 }
