@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -67,6 +68,7 @@ export function TerminalModal() {
       >
         <DialogHeader>
           <DialogTitle>终端</DialogTitle>
+          <DialogDescription>嵌入式终端会话</DialogDescription>
         </DialogHeader>
         <TerminalBody url={url} error={error} />
       </DialogContent>

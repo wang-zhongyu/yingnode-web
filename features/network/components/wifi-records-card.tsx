@@ -40,7 +40,7 @@ export function WiFiRecordsCard({ initialRecords }: WiFiRecordsCardProps) {
         </CardContent>
         <CardFooter>
           <Button variant="outline" size="sm" onClick={() => open("manualAddNetwork")}>
-            <Plus className="h-4 w-4 mr-1" />
+            <Plus className="size-4" data-icon="inline-start" />
             添加
           </Button>
         </CardFooter>
@@ -63,7 +63,7 @@ export function WiFiRecordsCard({ initialRecords }: WiFiRecordsCardProps) {
       </CardContent>
       <CardFooter>
         <Button variant="outline" size="sm" onClick={() => open("manualAddNetwork")}>
-          <Plus className="h-4 w-4 mr-1" />
+          <Plus className="size-4" data-icon="inline-start" />
           添加
         </Button>
       </CardFooter>

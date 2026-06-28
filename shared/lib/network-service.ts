@@ -625,6 +625,7 @@ export class NetworkService {
       id: number
       ssid: string
       security: string
+      networkId: number | null
       addedAt: string
       lastUsed: string | null
     }>
@@ -637,6 +638,7 @@ export class NetworkService {
       id: r.id,
       ssid: r.ssid,
       security: r.security,
+      networkId: r.networkId,
       addedAt: r.addedAt.toISOString(),
       lastUsed: r.lastUsed?.toISOString() ?? null,
     }))
@@ -767,7 +769,18 @@ export class NetworkService {
         )
       }
 
+      console.log(`[network] wpa_cli add_network → id=${networkId}, enabling...`)
       await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} enable_network ${networkId}`)
+
+      // Verify connection state after enable
+      try {
+        const { stdout: statusOut } = await execAsync(
+          `sudo wpa_cli -i ${safeArg(wifiInterface)} status`, 3000,
+        )
+        const wpaState = statusOut.match(/wpa_state=(\S+)/)?.[1] ?? "?"
+        console.log(`[network] post-enable wpa_state=${wpaState}`)
+      } catch { /* diagnostic only */ }
+
       // save_config / reconfigure may fail on DBus-managed wpa_supplicant
       // (no writable config file) — non-fatal, network is already added
       try { await execAsync(`sudo wpa_cli -i ${safeArg(wifiInterface)} save_config`) } catch { /* ok */ }
@@ -811,14 +824,18 @@ export class NetworkService {
 
       await this.updateDB({ currentSSID: ssid, ipAddress })
 
+      // ponytail: save wpa_supplicant networkId so reconnection can reuse it
       try {
         await prisma.wiFiRecord.upsert({
           where: { ssid },
-          update: { lastUsed: new Date() },
-          create: { ssid, security: security ?? (password ? "WPA2" : "OPEN") },
+          update: { lastUsed: new Date(), networkId },
+          create: { ssid, security: security ?? (password ? "WPA2" : "OPEN"), networkId },
         })
       } catch { /* non-fatal */ }
 
+      console.log(
+        `[network] connectWiFi OK: ssid="${ssid}" networkId=${networkId} ip=${ipAddress ?? "none"}`,
+      )
       return { success: true, ssid, ipAddress }
     } catch (error) {
       const msg = error instanceof Error ? error.message : "连接失败"
@@ -838,6 +855,62 @@ export class NetworkService {
       }
       console.error(`[network] connectWiFi failed: ${msg}${detail ? ` | stderr: ${detail}` : ""}`)
       return { success: false, ssid: null, ipAddress: null, error: `连接失败: ${msg.slice(0, 80)}` }
+    }
+  }
+
+  /** Reconnect to a previously-saved network using its wpa_supplicant network ID.
+   *  This reuses the wpa_supplicant configuration (including the saved password)
+   *  so the user does not need to re-enter credentials. */
+  async reconnectViaNetworkId(networkId: number, ssid: string): Promise<ConnectResult> {
+    const { wifiInterface } = await this.getConfig()
+
+    try {
+      const { stdout: listOut } = await execAsync(
+        `sudo wpa_cli -i ${safeArg(wifiInterface)} list_networks`, 3000,
+      )
+      const hasNetwork = listOut.split("\n").some((line) => line.startsWith(`${networkId}\t`))
+      if (!hasNetwork) {
+        return { success: false, ssid: null, ipAddress: null, error: "网络配置已失效，请重新输入密码连接" }
+      }
+
+      console.log(`[network] reconnectViaNetworkId: id=${networkId} ssid="${ssid}"`)
+      await execAsync(
+        `sudo wpa_cli -i ${safeArg(wifiInterface)} enable_network ${networkId}`,
+      )
+      await execAsync(
+        `sudo wpa_cli -i ${safeArg(wifiInterface)} select_network ${networkId}`,
+      )
+
+      // Poll for IP
+      let ipAddress: string | null = null
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 2000))
+        try {
+          const { stdout } = await execAsync(
+            `sudo wpa_cli -i ${safeArg(wifiInterface)} status`, 3000,
+          )
+          const m = stdout.match(/ip_address=(\S+)/)
+          if (m && m[1] && m[1] !== "0.0.0.0" && !m[1].startsWith("169.254")) {
+            ipAddress = m[1]
+            break
+          }
+        } catch { /* keep polling */ }
+      }
+
+      await this.updateDB({ currentSSID: ssid, ipAddress })
+      try {
+        await prisma.wiFiRecord.update({
+          where: { ssid },
+          data: { lastUsed: new Date() },
+        })
+      } catch { /* non-fatal */ }
+
+      console.log(`[network] reconnectViaNetworkId OK: ssid="${ssid}" ip=${ipAddress ?? "none"}`)
+      return { success: true, ssid, ipAddress }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "重连失败"
+      console.error(`[network] reconnectViaNetworkId failed: ${msg}`)
+      return { success: false, ssid: null, ipAddress: null, error: msg }
     }
   }
 }

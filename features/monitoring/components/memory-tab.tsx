@@ -3,6 +3,7 @@
 import { Puzzle } from "lucide-react"
 import { MetricCard } from "./metric-card"
 import { MetricChart } from "./metric-chart"
+import { ListEmpty } from "@/shared/components/list-empty"
 import { useMetricsHistory } from "../hooks/use-metrics-history"
 import { useProcesses } from "../hooks/use-processes"
 import { formatBytes, formatPercentage } from "../lib/format"
@@ -15,53 +16,52 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table"
+import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 
 function TopMemoryProcesses() {
   const { processes, isLoading, error } = useProcesses("mem", 5)
 
-  if (error) {
-    return (
-      <p className="text-sm text-muted-foreground py-4">
-        无法获取进程信息
-      </p>
-    )
-  }
+  if (error) return <ListEmpty message="无法获取进程信息" />
 
   if (isLoading) return <Skeleton className="h-48 w-full" />
 
-  if (processes.length === 0) return null
+  if (processes.length === 0) return <ListEmpty message="暂无进程数据" />
 
   return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>进程名</TableHead>
-            <TableHead>PID</TableHead>
-            <TableHead>内存</TableHead>
-            <TableHead>CPU</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {processes.map((p) => (
-            <TableRow key={p.pid}>
-              <TableCell className="max-w-[200px] truncate font-medium" title={p.name}>{p.name}</TableCell>
-              <TableCell>{p.pid}</TableCell>
-              <TableCell>{p.mem.toFixed(1)}%</TableCell>
-              <TableCell>{p.cpu.toFixed(1)}%</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <Card>
+      <CardContent className="pt-6">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>进程名</TableHead>
+                <TableHead>PID</TableHead>
+                <TableHead>内存</TableHead>
+                <TableHead>CPU</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {processes.map((p) => (
+                <TableRow key={p.pid}>
+                  <TableCell className="max-w-[200px] truncate font-medium" title={p.name}>{p.name}</TableCell>
+                  <TableCell>{p.pid}</TableCell>
+                  <TableCell>{p.mem.toFixed(1)}%</TableCell>
+                  <TableCell>{p.cpu.toFixed(1)}%</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
 export function MemoryTab({ metrics }: { metrics: SystemMetrics | null }) {
   const { records, isLoading: historyLoading } = useMetricsHistory(60)
 
-  if (!metrics) return null
+  if (!metrics) return <Skeleton className="h-96 w-full" />
 
   const memory = metrics?.memory
   const chartData = records.map((r) => {

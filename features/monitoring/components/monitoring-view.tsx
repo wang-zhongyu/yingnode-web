@@ -19,8 +19,8 @@ export function MonitoringView() {
 
   return (
     <Tabs defaultValue="overview">
-      <div className="flex items-center justify-between mb-4">
-        <TabsList>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <TabsList className="flex-nowrap overflow-x-auto">
           <TabsTrigger value="overview">概览</TabsTrigger>
           <TabsTrigger value="cpu">CPU</TabsTrigger>
           <TabsTrigger value="memory">内存</TabsTrigger>
@@ -28,8 +28,8 @@ export function MonitoringView() {
           <TabsTrigger value="processes">进程</TabsTrigger>
         </TabsList>
         {uptimeText && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Clock className="h-4 w-4" />
+          <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
+            <Clock className="size-4" />
             <span>运行时间</span>
             <span className="font-mono font-medium text-foreground">
               {uptimeText}

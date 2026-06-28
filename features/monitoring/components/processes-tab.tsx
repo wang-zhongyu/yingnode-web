@@ -1,6 +1,7 @@
 "use client"
 
 import { useProcesses } from "../hooks/use-processes"
+import { ListEmpty } from "@/shared/components/list-empty"
 import type { ProcessInfo } from "@/shared/types/monitoring"
 import {
   Table,
@@ -10,26 +11,23 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table"
+import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export function ProcessesTab() {
   const { processes, isLoading, error } = useProcesses("cpu", 50)
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <p className="text-sm text-muted-foreground">无法获取进程列表</p>
-      </div>
-    )
-  }
+  if (error) return <ListEmpty message="无法获取进程列表" />
 
   if (isLoading) return <Skeleton className="h-96 w-full" />
 
-  if (processes.length === 0) return null
+  if (processes.length === 0) return <ListEmpty message="暂无进程数据" />
 
   return (
-    <div className="overflow-x-auto">
-      <Table>
+    <Card>
+      <CardContent className="pt-6">
+        <div className="overflow-x-auto">
+          <Table>
         <TableHeader>
           <TableRow>
             <TableHead>进程名</TableHead>
@@ -51,6 +49,8 @@ export function ProcessesTab() {
           ))}
         </TableBody>
       </Table>
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

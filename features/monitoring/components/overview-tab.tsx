@@ -3,6 +3,7 @@
 import { Cpu, Puzzle, HardDrive, Thermometer } from "lucide-react"
 import { MetricCard } from "./metric-card"
 import { MetricCardSkeleton } from "./metric-card-skeleton"
+import { ListEmpty } from "@/shared/components/list-empty"
 import { formatBytes, formatPercentage } from "../lib/format"
 import type { SystemMetrics } from "@/shared/types/monitoring"
 
@@ -23,11 +24,7 @@ export function OverviewTab({ metrics, error }: OverviewTabProps) {
   }
 
   if (error || !metrics) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <p className="text-sm text-muted-foreground">无法获取系统指标</p>
-      </div>
-    )
+    return <ListEmpty message="无法获取系统指标" />
   }
 
   const { cpu, memory, disk, temp } = metrics

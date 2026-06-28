@@ -20,7 +20,7 @@ export function SettingsSidebar() {
       <SidebarHeader className="px-4 py-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={() => router.back()}>
+            <SidebarMenuButton onClick={() => router.push("/monitoring")}>
               <ArrowLeft className="size-4" />
               <span>返回</span>
             </SidebarMenuButton>

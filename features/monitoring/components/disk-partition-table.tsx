@@ -1,6 +1,7 @@
 "use client"
 
 import { useDiskPartitions } from "../hooks/use-disk-partitions"
+import { ListEmpty } from "@/shared/components/list-empty"
 import {
   Table,
   TableHeader,
@@ -16,13 +17,7 @@ export function DiskPartitionTable() {
 
   if (isLoading) return <Skeleton className="h-48 w-full" />
 
-  if (error) {
-    return (
-      <p className="text-sm text-muted-foreground py-4">
-        无法获取分区信息
-      </p>
-    )
-  }
+  if (error) return <ListEmpty message="无法获取分区信息" />
 
   if (partitions.length === 0) return null
 

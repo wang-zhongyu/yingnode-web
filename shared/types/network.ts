@@ -47,6 +47,7 @@ export interface WiFiRecordItem {
   id: number
   ssid: string
   security: string
+  networkId: number | null
   addedAt: string
   lastUsed: string | null
 }
