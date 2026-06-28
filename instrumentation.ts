@@ -94,6 +94,12 @@ function startNetworkMonitor(
       const status = await networkService.getStatus()
       const associated = await networkService.isWiFiAssociated()
 
+      // Reset counters when hotspot is active (AP mode shows as "not associated")
+      if (status.hotspotActive) {
+        offlineTicks = 0
+        onlineTicks = 0
+      }
+
       if (associated) {
         // WiFi is connected to an AP — verify internet access
         offlineTicks = 0
@@ -125,6 +131,7 @@ function startNetworkMonitor(
             console.log("[monitor] Hotspot locked, skipping startHotspot")
           } else {
             await networkService.startHotspot()
+            offlineTicks = 0
           }
         }
 
