@@ -121,6 +121,12 @@ npx prisma generate
 npx prisma db push  2>/dev/null || npx prisma db push 
 npm run build
 
+	# Next.js standalone -- copy static assets and .env into standalone output
+	mkdir -p "$INSTALL_DIR/.next/standalone/.next"
+	cp -r "$INSTALL_DIR/.next/static" "$INSTALL_DIR/.next/standalone/.next/static"
+	cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.next/standalone/.env"
+
+
 # ── Systemd service ──
 echo -e "${CYAN}[6/7] Installing systemd service...${NC}"
 cat > "/etc/systemd/system/$SERVICE_NAME.service" << UNIT
