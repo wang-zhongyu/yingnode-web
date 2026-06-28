@@ -38,16 +38,6 @@
       "check": "docker ps --format '{{.Names}}' | grep -q portainer"
     },
     {
-      "id": "homepage",
-      "name": "Homepage",
-      "description": "现代化服务导航面板",
-      "category": "工具",
-      "icon": "home",
-      "install": "docker run -d --name homepage --restart=always -p 3001:3000 -v /opt/homepage:/app/config ghcr.io/gethomepage/homepage:latest",
-      "uninstall": "docker stop homepage && docker rm homepage",
-      "check": "docker ps --format '{{.Names}}' | grep -q homepage"
-    },
-    {
       "id": "hermes",
       "name": "Hermes Agent",
       "description": "Nous Research 开源 AI Agent，支持多平台、持久记忆、子代理调度",

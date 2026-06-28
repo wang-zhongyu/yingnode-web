@@ -144,12 +144,18 @@ echo ""
 
 # ---- 9. DB status ----
 echo "--- Database status ---"
-if [ -f prisma/dev.db ]; then
+DB_PATH="${DATABASE_URL#file:}"
+DB_PATH="${DB_PATH:-/data/yingnode.db}"
+if [ -f "$DB_PATH" ]; then
+  STATUS=$(sqlite3 "$DB_PATH" "SELECT status, hotspotActive, currentSSID FROM NetworkStatus WHERE id=1;" 2>/dev/null || echo "no record")
+  echo "  $STATUS"
+  pass "DB readable ($DB_PATH)"
+elif [ -f prisma/dev.db ]; then
   STATUS=$(sqlite3 prisma/dev.db "SELECT status, hotspotActive, currentSSID FROM NetworkStatus WHERE id=1;" 2>/dev/null || echo "no record")
   echo "  $STATUS"
-  pass "DB readable"
+  pass "DB readable (dev.db)"
 else
-  warn "prisma/dev.db not found (run from project root)"
+  warn "yingnode.db not found at $DB_PATH or prisma/dev.db"
 fi
 echo ""
 

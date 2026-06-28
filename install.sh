@@ -59,7 +59,7 @@ done
 # Stop any running instance
 systemctl stop $SERVICE_NAME 2>/dev/null || true
 killall -9 hostapd dnsmasq node 2>/dev/null || true
-iw dev uap0 del 2>/dev/null || true
+iw dev "$WIFI_INTERFACE" set type managed 2>/dev/null || true
 
 # ── Directories ──
 echo -e "${CYAN}[2/7] Creating directories...${NC}"
@@ -116,7 +116,7 @@ echo -e "${CYAN}[5/7] Installing dependencies & building...${NC}"
 cd "$INSTALL_DIR"
 npm install --silent
 npx prisma generate
-npx prisma db push --accept-data-loss 2>/dev/null || npx prisma db push --accept-data-loss
+npx prisma db push  2>/dev/null || npx prisma db push 
 npm run build
 
 # ── Systemd service ──

@@ -35,8 +35,8 @@ COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/prisma ./prisma
 
-# System configs
-COPY config/hostapd.conf /etc/hostapd/hostapd.conf
+# System configs — hostapd/dnsmasq configs are generated dynamically by the
+# application at runtime, so we only ship the static dnsmasq template.
 COPY config/dnsmasq.conf /etc/dnsmasq.conf
 
 # Entrypoint: sync DB schema then start server
