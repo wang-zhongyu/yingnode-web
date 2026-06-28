@@ -59,6 +59,8 @@ done
 # Stop any running instance
 systemctl stop $SERVICE_NAME 2>/dev/null || true
 killall -9 hostapd dnsmasq node 2>/dev/null || true
+# Clean up leftover virtual AP interface (brcmfmac creates uap0) and reset WiFi
+iw dev uap0 del 2>/dev/null || true
 iw dev "$WIFI_INTERFACE" set type managed 2>/dev/null || true
 
 # ── Directories ──
