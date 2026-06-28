@@ -93,6 +93,10 @@ function startNetworkMonitor(
     try {
       const status = await networkService.getStatus()
       const associated = await networkService.isWiFiAssociated()
+      console.log(
+        `[monitor] associated=${associated} status=${status.status} ` +
+        `hotspotActive=${status.hotspotActive} offlineTicks=${offlineTicks} onlineTicks=${onlineTicks}`,
+      )
 
       // While hotspot is active, AP mode shows as "not associated" —
       // prevent offlineTicks from accumulating and retriggering start.
