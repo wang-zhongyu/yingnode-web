@@ -95,15 +95,22 @@ export async function connectWiFi(
     console.log(`[network] wpa_cli add_network → id=${networkId}, enabling...`)
     await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} enable_network ${networkId}`)
     await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} select_network ${networkId}`)
-    // ponytail: brcmfmac (RPi WiFi) sits INACTIVE after select_network without
-    // auto-scanning. Explicit scan kicks it into SCANNING → ASSOCIATING → COMPLETED.
+    // ponytail: brcmfmac (RPi WiFi) sits INACTIVE after select_network —
+    // auto-scan is not triggered. Explicit scan finds the network but
+    // wpa_supplicant still doesn't auto-associate. Calling reassociate
+    // after the scan forces the connection handshake.
     try {
       await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} scan`, 3000)
-    } catch { /* non-fatal — some drivers auto-scan */ }
+    } catch { /* non-fatal — scan may already be running (FAIL-BUSY) */ }
+    // Give scan time to complete, then force association
+    await new Promise((r) => setTimeout(r, 2000))
+    try {
+      await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} reassociate`, 3000)
+    } catch { /* non-fatal */ }
 
-    // Wait for wpa_state COMPLETED (up to 16s)
+    // Wait for wpa_state COMPLETED (up to 12s remaining)
     let wpaState = "?"
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 6; i++) {
       await new Promise((r) => setTimeout(r, 2000))
       try {
         const { stdout } = await execAsync(
@@ -112,9 +119,8 @@ export async function connectWiFi(
         wpaState = stdout.match(/wpa_state=(\S+)/)?.[1] ?? "?"
         console.log(`[network] poll #${i + 1}: wpa_state=${wpaState}`)
         if (wpaState === "COMPLETED") break
-        // DISCONNECTED = handshake failed (wrong key) or AP rejected — terminal.
+        // DISCONNECTED = handshake failed (wrong key) — terminal.
         // INTERFACE_DISABLED = driver failure — terminal.
-        // INACTIVE / SCANNING / ASSOCIATING / *_HANDSHAKE are transient — keep polling.
         if (wpaState === "DISCONNECTED" || wpaState === "INTERFACE_DISABLED") break
       } catch { /* keep waiting */ }
     }
