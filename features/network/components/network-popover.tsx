@@ -52,6 +52,13 @@ export function NetworkPopover() {
   }, [status, scan])
 
   async function handleConnect(ssid: string, hasPassword: boolean) {
+    // ponytail: when hotspot is active, always show confirmation before
+    // connecting — the hotspot will stop and the user will lose this page.
+    if (status?.hotspotActive) {
+      openModal("connectFromHotspot", { ssid })
+      return
+    }
+
     if (!hasPassword) {
       execute({ ssid, password: "", security: "OPEN" })
       return
@@ -61,7 +68,8 @@ export function NetworkPopover() {
   }
 
   function renderNetworkList() {
-    if (scanning) return <SpinnerEmpty message="正在扫描网络..." />
+    // ponytail: show "searching" until at least one scan has completed
+    if (scanning) return <SpinnerEmpty message="正在搜索网络..." />
     if (networks.length === 0) {
       return <ListEmpty message="未发现可用网络" />
     }

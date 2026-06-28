@@ -12,7 +12,8 @@ interface UseWiFiScanResult {
 
 export function useWiFiScan(): UseWiFiScanResult {
   const [networks, setNetworks] = useState<WiFiNetwork[]>([])
-  const [scanning, setScanning] = useState(false)
+  // ponytail: start scanning=true — shows "正在搜索" on mount before first scan
+  const [scanning, setScanning] = useState(true)
 
   const scan = useCallback(async (currentSSID: string | null) => {
     setScanning(true)

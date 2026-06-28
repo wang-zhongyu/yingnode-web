@@ -18,7 +18,7 @@ import { toast } from "sonner"
 import { AlertTriangle } from "lucide-react"
 
 export function ConnectFromHotspotDialog() {
-  const { type, isOpen, close } = useModalStore()
+  const { type, isOpen, data, close } = useModalStore()
 
   const { execute, isPending } = useAction(connectFromHotspotAction, {
     onSuccess({ data }) {
@@ -69,7 +69,7 @@ export function ConnectFromHotspotDialog() {
         </div>
 
         <ManualAddFormFields
-          initialSSID=""
+          initialSSID={data.ssid ?? ""}
           connecting={isPending}
           onConnect={handleConnect}
         />
