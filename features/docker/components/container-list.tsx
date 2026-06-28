@@ -26,6 +26,7 @@ export function ContainerList() {
       setDockerAvailable(data.dockerAvailable !== false)
     } catch {
       toast.error("无法获取 Docker 容器列表")
+      setDockerAvailable(false)
     } finally {
       setLoading(false)
     }

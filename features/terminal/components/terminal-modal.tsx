@@ -72,27 +72,37 @@ export function TerminalModal() {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) close() }}>
       <DialogContent
-        className="inset-[3%] max-w-none w-[94%] h-[94%] translate-x-0 translate-y-0 rounded-xl p-0 flex flex-col gap-0"
+        className="inset-[3%] max-w-none w-[94%] h-[94%] translate-x-0 translate-y-0 p-0 flex flex-col gap-0"
         showCloseButton
       >
         <DialogHeader>
           <DialogTitle>终端</DialogTitle>
         </DialogHeader>
-        {url ? (
-          <iframe src={url} className="flex-1 border-0" title="终端" />
-        ) : error ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2">
-            <p className="text-sm font-medium">ttyd 服务未运行或无法访问</p>
-            <p className="text-sm text-muted-foreground">
-              请确保 ttyd 已在端口 3001 启动
-            </p>
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            加载中...
-          </div>
-        )}
+        <TerminalBody url={url} error={error} />
       </DialogContent>
     </Dialog>
+  )
+}
+
+function TerminalBody({ url, error }: { url: string; error: boolean }) {
+  if (url) {
+    return <iframe src={url} className="flex-1 border-0" title="终端" />
+  }
+
+  if (error) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-2">
+        <p className="text-sm font-medium">ttyd 服务未运行或无法访问</p>
+        <p className="text-sm text-muted-foreground">
+          请确保 ttyd 已在端口 3001 启动
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+      加载中...
+    </div>
   )
 }
