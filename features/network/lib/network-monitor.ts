@@ -8,7 +8,7 @@ export function startNetworkMonitor(
   networkService: Pick<
     NetworkService,
     "isWiFiAssociated" | "getStatus" |
-    "startHotspot" | "stopHotspot"
+    "startHotspot" | "stopHotspot" | "remanageNM"
   >,
   isManualHotspotLocked: () => Promise<boolean>,
 ) {
@@ -51,6 +51,7 @@ export function startNetworkMonitor(
         } else {
           console.log("[monitor] WiFi associated → stopping hotspot")
           await networkService.stopHotspot()
+          await networkService.remanageNM()
           lastToggleTime = Date.now()
         }
       }

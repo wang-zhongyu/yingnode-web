@@ -95,8 +95,13 @@ export async function connectWiFi(
     console.log(`[network] wpa_cli add_network → id=${networkId}, enabling...`)
     await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} enable_network ${networkId}`)
     await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} select_network ${networkId}`)
+    // ponytail: brcmfmac (RPi WiFi) sits INACTIVE after select_network without
+    // auto-scanning. Explicit scan kicks it into SCANNING → ASSOCIATING → COMPLETED.
+    try {
+      await execAsync(`sudo wpa_cli ${WPA_SOCKET_CLI} -i ${safeArg(wifiInterface)} scan`, 3000)
+    } catch { /* non-fatal — some drivers auto-scan */ }
 
-    // Wait for wpa_state COMPLETED (up to 15s)
+    // Wait for wpa_state COMPLETED (up to 16s)
     let wpaState = "?"
     for (let i = 0; i < 8; i++) {
       await new Promise((r) => setTimeout(r, 2000))
@@ -107,7 +112,10 @@ export async function connectWiFi(
         wpaState = stdout.match(/wpa_state=(\S+)/)?.[1] ?? "?"
         console.log(`[network] poll #${i + 1}: wpa_state=${wpaState}`)
         if (wpaState === "COMPLETED") break
-        if (wpaState === "DISCONNECTED" || wpaState === "INACTIVE" || wpaState === "INTERFACE_DISABLED") break
+        // DISCONNECTED = handshake failed (wrong key) or AP rejected — terminal.
+        // INTERFACE_DISABLED = driver failure — terminal.
+        // INACTIVE / SCANNING / ASSOCIATING / *_HANDSHAKE are transient — keep polling.
+        if (wpaState === "DISCONNECTED" || wpaState === "INTERFACE_DISABLED") break
       } catch { /* keep waiting */ }
     }
 

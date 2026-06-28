@@ -7,16 +7,13 @@ import { networkService } from "@/shared/lib/network-service"
 import { setManualHotspotLock } from "@/shared/lib/hotspot-lock"
 
 async function connectFromHotspotImpl(ssid: string, password: string, security: string) {
-  // 1. Stop hotspot (also remanages NM and removes static IP)
+  // 1. Stop hotspot — cleans interface (managed mode, down/up reset), no NM
   await networkService.stopHotspot()
 
-  // 2. Unmanage NM immediately — stopHotspot re-managed it, but we need
-  //    exclusive control for ensureInterfaceReady + standalone wpa_supplicant.
-  //    Without this, NM restarts its own wpa_supplicant and fights ours.
-  await networkService.unmanageNM()
+  // 2. Wait for interface to settle after firmware reset
   await new Promise((r) => setTimeout(r, 2000))
 
-  // 3. Bring interface to managed mode
+  // 3. Bring interface to managed mode (ensure up, type managed)
   const ready = await networkService.ensureInterfaceReady()
   if (!ready.ok) {
     try { await networkService.startHotspot() } catch { /* ok */ }
@@ -26,8 +23,6 @@ async function connectFromHotspotImpl(ssid: string, password: string, security: 
   // 4. Connect to WiFi via standalone wpa_supplicant
   const result = await networkService.connectWiFi(ssid, password, security)
   if (!result.success) {
-    // Kill standalone wpa_supplicant left by failed connectWiFi before restarting hotspot
-    try { await networkService.unmanageNM() } catch { /* ok */ }
     try { await networkService.startHotspot() } catch { /* ok */ }
     throw new Error(result.error ?? "连接失败，热点已恢复")
   }

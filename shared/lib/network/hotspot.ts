@@ -41,16 +41,27 @@ export async function stopHotspot(state: NetworkServiceState): Promise<void> {
     )
   } catch { /* non-fatal */ }
 
-  // Clean up virtual AP interface if it exists (from old code)
-  try { await execAsync("sudo iw dev uap0 del 2>/dev/null || true", 2000) } catch { /* ok */ }
-
-  // Restore NM management
+  // Clean up virtual AP interface if it exists (brcmfmac creates uap0)
+  // ponytail: check existence first — blindly deleting uap0 triggers a firmware
+  // crash on brcmfmac/nexmon (BCM43455) that leaves the radio unable to associate.
   try {
-    await execAsync("systemctl is-active --quiet NetworkManager")
-    await execAsync(
-      `sudo nmcli device set ${safeArg(wifiInterface)} managed yes 2>/dev/null || true`,
-    )
-  } catch { /* NM not running */ }
+    const { stdout } = await execAsync("iw dev 2>/dev/null | grep uap0 || true", 2000)
+    if (stdout.includes("uap0")) {
+      await execAsync("sudo iw dev uap0 del", 2000)
+    }
+  } catch { /* non-fatal */ }
+
+  // Reset WiFi interface to clear any residual firmware state after AP mode
+  try {
+    await execAsync(`sudo iw dev ${safeArg(wifiInterface)} set type managed 2>/dev/null || true`, 2000)
+    await execAsync(`sudo ip link set ${safeArg(wifiInterface)} down`, 2000)
+    await execAsync(`sudo ip link set ${safeArg(wifiInterface)} up`, 3000)
+  } catch { /* non-fatal */ }
+
+  // ponytail: don't remanage NM here — callers that need NM (e.g. the monitor
+  // when WiFi is back) call remanageNM() explicitly. The connectFromHotspotImpl
+  // path needs exclusive control, and the NM manage→unmanage cycle leaves the
+  // interface in a bad state on brcmfmac (BCM43455) where association fails.
 
   await updateDB({ status: "ONLINE", hotspotActive: false })
   console.log("[network] Hotspot stopped")
