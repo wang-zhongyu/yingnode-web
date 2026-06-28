@@ -10,12 +10,13 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/components/ui/sidebar"
-import { Settings, User, Wifi } from "lucide-react"
+import { Settings, Terminal, User, Wifi } from "lucide-react"
 
 const settingsNavItems = [
   { label: "账号设置", href: "/settings/account", icon: User },
   { label: "通用设置", href: "/settings/general", icon: Settings },
   { label: "网络设置", href: "/settings/network", icon: Wifi },
+  { label: "SSH 设置", href: "/settings/ssh", icon: Terminal },
 ]
 
 export function SettingsNavMain() {
