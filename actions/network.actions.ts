@@ -38,12 +38,17 @@ export const connectWiFiAction = actionClient
   .schema(manualAddSchema)
   .action(async ({ parsedInput: { ssid, password, security } }) => {
     const status = await networkService.getStatus()
+    console.log(
+      `[action] connectWiFiAction: ssid="${ssid}" hotspotActive=${status.hotspotActive} status=${status.status}`,
+    )
     if (!status.hotspotActive) {
+      console.log("[action] → direct connectWiFi path")
       const result = await networkService.connectWiFi(ssid, password, security)
       if (!result.success) throw new Error(result.error ?? "连接失败")
       return result
     }
 
+    console.log("[action] → connectFromHotspotImpl path")
     setManualHotspotLock(true)
     try {
       return await connectFromHotspotImpl(ssid, password ?? "", security)

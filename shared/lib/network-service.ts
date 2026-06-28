@@ -750,6 +750,19 @@ export class NetworkService {
 
   async connectWiFi(ssid: string, password?: string, security?: string): Promise<ConnectResult> {
     const { wifiInterface } = await this.getConfig()
+
+    // Check wpa_cli reachability before attempting connection
+    try {
+      await execAsync(
+        `sudo wpa_cli -i ${safeArg(wifiInterface)} ping`, 3000,
+      )
+    } catch {
+      console.error(
+        `[network] wpa_cli unreachable on ${wifiInterface} — socket missing or interface unmanaged`,
+      )
+      return { success: false, ssid: null, ipAddress: null, error: "WiFi 接口未就绪，请稍后重试" }
+    }
+
     // ponytail: escapeShellArg handles single quotes for shell; extra replaces
     // handle chars that wpa_cli's string parser treats specially inside "..."
     const escapedSSID = escapeShellArg(ssid)
@@ -840,6 +853,24 @@ export class NetworkService {
 
       await this.updateDB({ currentSSID: ssid, ipAddress })
 
+      // Check if wpa_supplicant actually associated
+      let wpaState = "?"
+      try {
+        const { stdout } = await execAsync(
+          `sudo wpa_cli -i ${safeArg(wifiInterface)} status`, 3000,
+        )
+        wpaState = stdout.match(/wpa_state=(\S+)/)?.[1] ?? "?"
+      } catch { /* diagnostic only */ }
+
+      if (wpaState !== "COMPLETED") {
+        console.error(`[network] connectWiFi: wpa_state=${wpaState} — association failed`)
+        return { success: false, ssid: null, ipAddress: null, error: `WiFi 连接未完成 (${wpaState})` }
+      }
+
+      if (!ipAddress) {
+        console.error("[network] connectWiFi: associated but no DHCP IP — device reachable at static IP only")
+      }
+
       // ponytail: save wpa_supplicant networkId so reconnection can reuse it
       try {
         await prisma.wiFiRecord.upsert({
@@ -850,7 +881,7 @@ export class NetworkService {
       } catch { /* non-fatal */ }
 
       console.log(
-        `[network] connectWiFi OK: ssid="${ssid}" networkId=${networkId} ip=${ipAddress ?? "none"}`,
+        `[network] connectWiFi OK: ssid="${ssid}" networkId=${networkId} wpa_state=${wpaState} ip=${ipAddress ?? "none"}`,
       )
       return { success: true, ssid, ipAddress }
     } catch (error) {
