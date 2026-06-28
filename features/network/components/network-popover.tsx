@@ -22,8 +22,11 @@ export function NetworkPopover() {
   const openModal = useModalStore((s) => s.open)
 
   useEffect(() => {
-    fetchStatus()
-    fetchScan()
+    async function load() {
+      const currentSSID = await fetchStatus()
+      fetchScan(currentSSID)
+    }
+    load()
   }, [])
 
   async function fetchStatus() {
@@ -33,18 +36,26 @@ export function NetworkPopover() {
       const data = await res.json()
       setStatus(data)
       setStatusError(false)
+      return data.currentSSID as string | null
     } catch {
       setStatusError(true)
+      return null
     }
   }
 
-  async function fetchScan() {
+  async function fetchScan(currentSSID: string | null) {
     setScanning(true)
     try {
       const res = await fetch("/api/network/scan")
       if (!res.ok) throw new Error("扫描失败")
       const data = await res.json()
-      setNetworks(data.networks)
+      const networks: WiFiNetwork[] = data.networks
+      if (currentSSID) {
+        for (const n of networks) {
+          if (n.ssid === currentSSID) n.connected = true
+        }
+      }
+      setNetworks(networks)
     } catch {
       toast.error("无法扫描网络，请检查无线网卡")
     } finally {

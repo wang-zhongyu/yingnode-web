@@ -467,15 +467,22 @@ export class NetworkService {
     }
   }
 
-  /** Sync WiFi networks from wpa_supplicant.conf into the database.
-   *  Reads the system config file and imports any networks not already tracked. */
+  /** Sync WiFi networks from wpa_supplicant into the database.
+   *  Uses wpa_cli list_networks to read saved networks from the WiFi interface. */
   private async syncWpaSupplicantNetworks(): Promise<void> {
     try {
-      const { stdout } = await execAsync("sudo cat /etc/wpa_supplicant/wpa_supplicant.conf", 5000)
-      const ssidMatches = stdout.matchAll(/ssid\s*=\s*"(.+?)"/g)
-      for (const match of ssidMatches) {
-        const ssid = match[1]
-        if (!ssid || ssid === "\\x00") continue
+      const { wifiInterface } = await this.getConfig()
+      const { stdout } = await execAsync(
+        `wpa_cli -i ${safeArg(wifiInterface)} list_networks`,
+        5000,
+      )
+      const lines = stdout.split("\n").slice(1)
+      for (const line of lines) {
+        const parts = line.split("\t")
+        if (parts.length < 2) continue
+        const id = parseInt(parts[0], 10)
+        const ssid = parts[1]
+        if (isNaN(id) || !ssid || ssid === "\\x00") continue
         try {
           const existing = await prisma.wiFiRecord.findUnique({ where: { ssid } })
           if (!existing) {
@@ -486,7 +493,7 @@ export class NetworkService {
         }
       }
     } catch {
-      // File may not exist, sudo may fail — that's ok
+      // wpa_cli may not be available — that's ok
     }
   }
 
