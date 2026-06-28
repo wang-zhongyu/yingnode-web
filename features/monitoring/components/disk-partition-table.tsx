@@ -27,29 +27,31 @@ export function DiskPartitionTable() {
   if (partitions.length === 0) return null
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>文件系统</TableHead>
-          <TableHead>大小</TableHead>
-          <TableHead>已用</TableHead>
-          <TableHead>可用</TableHead>
-          <TableHead>使用率</TableHead>
-          <TableHead>挂载点</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {partitions.map((p, i) => (
-          <TableRow key={i}>
-            <TableCell className="font-medium">{p.filesystem}</TableCell>
-            <TableCell>{p.size}</TableCell>
-            <TableCell>{p.used}</TableCell>
-            <TableCell>{p.available}</TableCell>
-            <TableCell>{p.usePercent}</TableCell>
-            <TableCell>{p.mountedOn}</TableCell>
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>文件系统</TableHead>
+            <TableHead>大小</TableHead>
+            <TableHead>已用</TableHead>
+            <TableHead>可用</TableHead>
+            <TableHead>使用率</TableHead>
+            <TableHead>挂载点</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {partitions.map((p, i) => (
+            <TableRow key={i}>
+              <TableCell className="max-w-[150px] truncate font-medium" title={p.filesystem}>{p.filesystem}</TableCell>
+              <TableCell>{p.size}</TableCell>
+              <TableCell>{p.used}</TableCell>
+              <TableCell>{p.available}</TableCell>
+              <TableCell>{p.usePercent}</TableCell>
+              <TableCell className="max-w-[200px] truncate" title={p.mountedOn}>{p.mountedOn}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   )
 }

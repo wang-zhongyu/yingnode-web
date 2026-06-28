@@ -402,23 +402,26 @@ export class NetworkService {
       const ssid = ssidMatch[1]
       if (!ssid || ssid === "\\x00") continue
 
+      const freqMatch = cell.match(/Frequency:(\d+\.?\d*)\s*GHz/)
       networks.push({
         ssid,
         signal: signalMatch ? parseInt(signalMatch[1]) : -100,
         security: encMatch && encMatch[1] === "on" ? "WPA2" : "OPEN",
         connected: false,
+        frequency: freqMatch ? parseFloat(freqMatch[1]) : undefined,
       })
     }
 
     return networks.sort((a, b) => b.signal - a.signal)
   }
 
-  /** List physical network interfaces with their operstate and IPv4 address.
-   *  Filters out loopback. */
+  /** List physical network interfaces with their operstate and IPv4 addresses.
+   *  Filters out loopback. Non-hotspot IPs are listed first. */
   async getInterfaceStatuses(): Promise<
-    Array<{ name: string; state: "UP" | "DOWN" | "UNKNOWN"; ipv4?: string }>
+    Array<{ name: string; state: "UP" | "DOWN" | "UNKNOWN"; ipv4s: string[] }>
   > {
     try {
+      const { hotspotIp } = await this.getConfig()
       const { stdout: linkOut } = await execAsync("ip -o link show")
       const stateMap = new Map<string, string>()
       for (const line of linkOut.split("\n")) {
@@ -431,31 +434,59 @@ export class NetworkService {
       }
 
       const { stdout: addrOut } = await execAsync("ip -o -4 addr show")
-      const ipMap = new Map<string, string>()
+      const ipMap = new Map<string, string[]>()
       for (const line of addrOut.split("\n")) {
         const m = line.match(/^\d+:\s+(\S+)\s+inet\s+([\d.]+)/)
         if (!m) continue
         const iface = m[1].includes("@") ? m[1].split("@")[0] : m[1]
-        ipMap.set(iface, m[2])
+        const existing = ipMap.get(iface) ?? []
+        existing.push(m[2])
+        ipMap.set(iface, existing)
       }
 
       const result: Array<{
         name: string
         state: "UP" | "DOWN" | "UNKNOWN"
-        ipv4?: string
+        ipv4s: string[]
       }> = []
       for (const [name, state] of stateMap) {
         if (name === "lo") continue
-        result.push({
-          name,
-          state: state as "UP" | "DOWN" | "UNKNOWN",
-          ipv4: ipMap.get(name),
+        const ips = ipMap.get(name) ?? []
+        // Sort: non-hotspot IPs first, hotspot IP last
+        ips.sort((a, b) => {
+          if (a === hotspotIp) return 1
+          if (b === hotspotIp) return -1
+          return 0
         })
+        result.push({ name, state: state as "UP" | "DOWN" | "UNKNOWN", ipv4s: ips })
       }
 
       return result
     } catch {
       return []
+    }
+  }
+
+  /** Sync WiFi networks from wpa_supplicant.conf into the database.
+   *  Reads the system config file and imports any networks not already tracked. */
+  private async syncWpaSupplicantNetworks(): Promise<void> {
+    try {
+      const { stdout } = await execAsync("sudo cat /etc/wpa_supplicant/wpa_supplicant.conf", 5000)
+      const ssidMatches = stdout.matchAll(/ssid\s*=\s*"(.+?)"/g)
+      for (const match of ssidMatches) {
+        const ssid = match[1]
+        if (!ssid || ssid === "\\x00") continue
+        try {
+          const existing = await prisma.wiFiRecord.findUnique({ where: { ssid } })
+          if (!existing) {
+            await prisma.wiFiRecord.create({ data: { ssid, security: "WPA2" } })
+          }
+        } catch {
+          // skip duplicates or DB errors silently
+        }
+      }
+    } catch {
+      // File may not exist, sudo may fail — that's ok
     }
   }
 
@@ -469,6 +500,7 @@ export class NetworkService {
       lastUsed: string | null
     }>
   > {
+    await this.syncWpaSupplicantNetworks()
     const records = await prisma.wiFiRecord.findMany({
       orderBy: { addedAt: "desc" },
     })

@@ -1,14 +1,33 @@
-import { exec } from "child_process"
-import { promisify } from "util"
+import { execAsync, safeArg } from "@/shared/lib/shell"
 import type { DockerContainer, ContainerAction } from "@/shared/types/docker"
 
-const execAsync = promisify(exec)
-
 class DockerService {
+  private dockerAvailable: boolean | null = null
+
+  /** Check if Docker is installed and accessible. Result is cached. */
+  async isAvailable(): Promise<boolean> {
+    return this.checkDocker()
+  }
+
+  /** Check if Docker is installed and accessible. Result is cached. */
+  private async checkDocker(): Promise<boolean> {
+    if (this.dockerAvailable !== null) return this.dockerAvailable
+    try {
+      await execAsync("sudo docker info", 5000)
+      this.dockerAvailable = true
+    } catch {
+      this.dockerAvailable = false
+    }
+    return this.dockerAvailable
+  }
+
   async getContainers(all = true): Promise<DockerContainer[]> {
+    const available = await this.checkDocker()
+    if (!available) return []
+
     const args = all ? "-a" : ""
     const { stdout } = await execAsync(
-      `docker ps ${args} --format "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.State}}|{{.Ports}}|{{.CreatedAt}}"`,
+      `sudo docker ps ${args} --format "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.State}}|{{.Ports}}|{{.CreatedAt}}"`,
     )
 
     return stdout
@@ -30,11 +49,15 @@ class DockerService {
   }
 
   async containerAction(id: string, action: ContainerAction): Promise<void> {
-    await execAsync(`docker ${action} ${id}`)
+    const available = await this.checkDocker()
+    if (!available) throw new Error("Docker 不可用")
+    await execAsync(`sudo docker ${action} ${safeArg(id)}`)
   }
 
   async getLogs(id: string, tail = 100): Promise<string> {
-    const { stdout } = await execAsync(`docker logs --tail ${tail} ${id}`)
+    const available = await this.checkDocker()
+    if (!available) return ""
+    const { stdout } = await execAsync(`sudo docker logs --tail ${tail} ${safeArg(id)}`)
     return stdout
   }
 }

@@ -16,14 +16,14 @@ export function NetworkSettingsSheet() {
   const { type, isOpen, close } = useModalStore()
   const [status, setStatus] = useState<NetworkStatus | null>(null)
 
-  if (type !== "networkSettings") return null
-
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen || type !== "networkSettings") return
     fetch("/api/network/status")
       .then((r) => r.json())
       .then(setStatus)
-  }, [isOpen])
+  }, [isOpen, type])
+
+  if (type !== "networkSettings") return null
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => { if (!open) close() }}>
@@ -43,13 +43,17 @@ export function NetworkSettingsSheet() {
                   : "离线"
             }
           />
-          <InfoRow label="IP 地址" value={status?.ipAddress ?? "—"} />
+          <InfoRow label="接口" value={status?.wifiInterface ?? "—"} />
+          <InfoRow label="IP 地址" value={status?.reachableIp ?? "—"} />
           <InfoRow label="当前 SSID" value={status?.currentSSID ?? "—"} />
+          {status?.reachableIp ? (
+            <InfoRow label="访问地址" value={`http://${status.reachableIp}:3000`} />
+          ) : null}
           <Separator />
           <div className="flex flex-col gap-1.5">
             <p className="text-sm font-medium">热点信息</p>
-            <InfoRow label="SSID" value="yingnode" />
-            <InfoRow label="IP" value="172.16.42.1" />
+            <InfoRow label="SSID" value={status?.hotspotSsid ?? "yingnode"} />
+            <InfoRow label="IP" value={status?.hotspotIp ?? "172.16.42.1"} />
             <p className="text-xs text-muted-foreground">
               断网时自动开启，连接后关闭
             </p>

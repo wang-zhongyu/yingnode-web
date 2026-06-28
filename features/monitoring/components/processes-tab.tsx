@@ -28,27 +28,29 @@ export function ProcessesTab() {
   if (processes.length === 0) return null
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>进程名</TableHead>
-          <TableHead>PID</TableHead>
-          <TableHead>用户</TableHead>
-          <TableHead>CPU %</TableHead>
-          <TableHead>内存 %</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {processes.map((p: ProcessInfo) => (
-          <TableRow key={p.pid}>
-            <TableCell className="font-medium">{p.name}</TableCell>
-            <TableCell>{p.pid}</TableCell>
-            <TableCell>{p.user}</TableCell>
-            <TableCell>{p.cpu.toFixed(1)}</TableCell>
-            <TableCell>{p.mem.toFixed(1)}</TableCell>
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>进程名</TableHead>
+            <TableHead>PID</TableHead>
+            <TableHead>用户</TableHead>
+            <TableHead>CPU %</TableHead>
+            <TableHead>内存 %</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {processes.map((p: ProcessInfo) => (
+            <TableRow key={p.pid}>
+              <TableCell className="max-w-[200px] truncate font-medium" title={p.name}>{p.name}</TableCell>
+              <TableCell>{p.pid}</TableCell>
+              <TableCell>{p.user}</TableCell>
+              <TableCell>{p.cpu.toFixed(1)}</TableCell>
+              <TableCell>{p.mem.toFixed(1)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   )
 }

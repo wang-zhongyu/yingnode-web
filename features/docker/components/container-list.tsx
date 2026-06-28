@@ -13,6 +13,7 @@ import { PlayIcon, SquareIcon, RotateCwIcon, FileTextIcon } from "lucide-react"
 export function ContainerList() {
   const [containers, setContainers] = useState<DockerContainer[]>([])
   const [loading, setLoading] = useState(true)
+  const [dockerAvailable, setDockerAvailable] = useState(true)
   const [logsId, setLogsId] = useState<string | null>(null)
 
   async function fetchContainers() {
@@ -22,6 +23,7 @@ export function ContainerList() {
       if (!res.ok) throw new Error("Failed")
       const data = await res.json()
       setContainers(data.containers)
+      setDockerAvailable(data.dockerAvailable !== false)
     } catch {
       toast.error("无法获取 Docker 容器列表")
     } finally {
@@ -49,6 +51,11 @@ export function ContainerList() {
   }, [])
 
   if (loading) return <SpinnerEmpty message="加载容器列表..." />
+
+  if (!dockerAvailable) {
+    return <ListEmpty message="Docker 不可用，请确保 Docker 已安装并启动" />
+  }
+
   if (containers.length === 0) return <ListEmpty message="没有 Docker 容器" />
 
   return (

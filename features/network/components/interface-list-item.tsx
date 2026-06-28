@@ -6,7 +6,7 @@ const STATE_LABELS: Record<string, string> = {
   UNKNOWN: "未知",
 }
 
-export function InterfaceListItem({ name, state, ipv4 }: InterfaceStatus) {
+export function InterfaceListItem({ name, state, ipv4s }: InterfaceStatus) {
   const stateLabel = STATE_LABELS[state] ?? "未知"
 
   return (
@@ -22,7 +22,7 @@ export function InterfaceListItem({ name, state, ipv4 }: InterfaceStatus) {
       <div className="flex items-center gap-4">
         <span className="text-xs text-muted-foreground">{stateLabel}</span>
         <span className="text-sm font-mono text-muted-foreground">
-          {ipv4 ?? "—"}
+          {ipv4s.length > 0 ? ipv4s.join(", ") : "—"}
         </span>
       </div>
     </div>

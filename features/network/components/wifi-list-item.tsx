@@ -34,6 +34,11 @@ export function WiFiListItem({ network, onConnect }: WiFiListItemProps) {
       <div className="flex items-center gap-2">
         <SignalIcon bars={bars} />
         <span className="text-sm">{network.ssid}</span>
+        {network.frequency ? (
+          <span className="text-xs text-muted-foreground font-mono">
+            {network.frequency >= 5 ? "5G" : "2.4G"}
+          </span>
+        ) : null}
       </div>
       <div className="flex items-center gap-2">
         {securityIcon(network.security)}

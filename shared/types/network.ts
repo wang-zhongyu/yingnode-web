@@ -7,6 +7,9 @@ export interface NetworkStatus {
   currentSSID: string | null
   ipAddress: string | null
   reachableIp: string | null
+  hotspotSsid?: string
+  hotspotIp?: string
+  wifiInterface?: string
 }
 
 export interface WiFiNetwork {
@@ -14,6 +17,7 @@ export interface WiFiNetwork {
   signal: number
   security: string
   connected: boolean
+  frequency?: number
 }
 
 export interface ScanResult {
@@ -35,7 +39,7 @@ export interface ConnectResult {
 export interface InterfaceStatus {
   name: string
   state: "UP" | "DOWN" | "UNKNOWN"
-  ipv4?: string
+  ipv4s: string[]
 }
 
 export interface WiFiRecordItem {

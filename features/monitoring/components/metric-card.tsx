@@ -66,7 +66,7 @@ export function MetricCard({
           <CardTitle>{label}</CardTitle>
         </div>
         {secondaryValue ? (
-          <CardDescription>{secondaryValue}</CardDescription>
+          <CardDescription className="truncate">{secondaryValue}</CardDescription>
         ) : null}
         {statusLabel ? (
           <CardAction>
