@@ -76,68 +76,59 @@ export async function register() {
 function startNetworkMonitor(
   networkService: Pick<
     NetworkService,
-    "isOnline" | "getStatus" | "startHotspot" | "stopHotspot" |
-    "updateDB" | "ensureInterfaceReady" | "hasExternalIp"
+    "isWiFiAssociated" | "checkConnectivity" | "getStatus" |
+    "startHotspot" | "stopHotspot" | "updateDB"
   >,
   isManualHotspotLocked: () => boolean,
 ) {
-  let consecutiveFailures = 0
-  let consecutiveSuccesses = 0
+  // Debounce counters — only act after N consecutive same-state ticks
+  let offlineTicks = 0
+  let onlineTicks = 0
   let checking = false
 
   const check = async () => {
-    // Prevent concurrent ticks — a slow ping/I/O on a disconnected
-    // network can cause overlapping check() calls via setInterval.
     if (checking) return
     checking = true
 
     try {
-      // Verify interface is in correct state before connectivity checks
-      // Skip AP mode check — don't kill a running hotspot
-      const ready = await networkService.ensureInterfaceReady({
-        skipApModeCheck: true,
-      })
-      if (!ready.ok) {
-        console.warn(`[monitor] Interface not ready: ${ready.reason}; skipping tick`)
-        return
-      }
-
-      const online = await networkService.isOnline()
       const status = await networkService.getStatus()
+      const associated = await networkService.isWiFiAssociated()
 
-      if (online) {
-        consecutiveFailures = 0
-        consecutiveSuccesses++
+      if (associated) {
+        // WiFi is connected to an AP — verify internet access
+        offlineTicks = 0
+        const pingOk = await networkService.checkConnectivity()
 
-        if (status.hotspotActive && consecutiveSuccesses >= 3) {
-          if (isManualHotspotLocked()) {
-            console.log("[monitor] Hotspot locked, skipping stopHotspot")
-          } else {
-            await networkService.stopHotspot()
-            consecutiveSuccesses = 0
+        if (pingOk) {
+          onlineTicks++
+          // Stop hotspot after 3 consecutive confirmed-online ticks
+          if (status.hotspotActive && onlineTicks >= 3) {
+            if (isManualHotspotLocked()) {
+              console.log("[monitor] Hotspot locked, skipping stopHotspot")
+            } else {
+              await networkService.stopHotspot()
+              onlineTicks = 0
+            }
           }
+        } else {
+          // Associated but no internet (captive portal, firewall)
+          // Don't start hotspot — user is on a network, just restricted
+          onlineTicks = 0
         }
       } else {
-        consecutiveSuccesses = 0
-        consecutiveFailures++
+        // WiFi is NOT connected to any AP
+        onlineTicks = 0
+        offlineTicks++
 
-        if (!status.hotspotActive && consecutiveFailures >= 3) {
+        if (!status.hotspotActive && offlineTicks >= 3) {
           if (isManualHotspotLocked()) {
             console.log("[monitor] Hotspot locked, skipping startHotspot")
           } else {
-            // Safeguard: don't start hotspot if already connected to an external network
-            // (e.g. WiFi connected but ping/DNS blocked by firewall — device is still online)
-            const hasExternal = await networkService.hasExternalIp()
-            if (hasExternal) {
-              console.log("[monitor] External IP detected, skipping startHotspot")
-              consecutiveFailures = 0
-            } else {
-              await networkService.startHotspot()
-            }
+            await networkService.startHotspot()
           }
         }
 
-        if (status.status !== "HOTSPOT_ACTIVE" && consecutiveFailures >= 3) {
+        if (status.status !== "HOTSPOT_ACTIVE" && offlineTicks >= 3) {
           await networkService.updateDB({ status: "OFFLINE" })
         }
       }
@@ -148,8 +139,6 @@ function startNetworkMonitor(
     }
   }
 
-  // Use setTimeout chain instead of setInterval — each tick schedules
-  // the next one after completion, preventing overlap and backpressure.
   function scheduleNext() {
     setTimeout(() => {
       check().finally(scheduleNext)
