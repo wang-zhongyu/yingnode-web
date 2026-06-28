@@ -252,8 +252,22 @@ export class NetworkService {
 
   private lastHotspotFailure = 0
   private static readonly HOTSPOT_RETRY_COOLDOWN_MS = 300_000 // 5 minutes
+  private startingHotspot = false
 
   async startHotspot(): Promise<void> {
+    // Prevent concurrent start attempts from overlapping monitor ticks
+    // or manual API calls
+    if (this.startingHotspot) return
+    this.startingHotspot = true
+
+    try {
+      await this.startHotspotInternal()
+    } finally {
+      this.startingHotspot = false
+    }
+  }
+
+  private async startHotspotInternal(): Promise<void> {
     const existingStatus = await this.getStatus()
     if (existingStatus.hotspotActive) return
 

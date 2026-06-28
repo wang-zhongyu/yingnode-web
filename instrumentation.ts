@@ -83,8 +83,14 @@ function startNetworkMonitor(
 ) {
   let consecutiveFailures = 0
   let consecutiveSuccesses = 0
+  let checking = false
 
   const check = async () => {
+    // Prevent concurrent ticks — a slow ping/I/O on a disconnected
+    // network can cause overlapping check() calls via setInterval.
+    if (checking) return
+    checking = true
+
     try {
       // Verify interface is in correct state before connectivity checks
       // Skip AP mode check — don't kill a running hotspot
@@ -137,9 +143,19 @@ function startNetworkMonitor(
       }
     } catch (error) {
       console.error("[monitor] check error:", error)
+    } finally {
+      checking = false
     }
   }
 
+  // Use setTimeout chain instead of setInterval — each tick schedules
+  // the next one after completion, preventing overlap and backpressure.
+  function scheduleNext() {
+    setTimeout(() => {
+      check().finally(scheduleNext)
+    }, 10_000)
+  }
+
   check()
-  setInterval(check, 10_000)
+  scheduleNext()
 }
