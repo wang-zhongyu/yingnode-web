@@ -18,11 +18,16 @@ SERVICE_NAME="yingnode"
 # ── Defaults (override via env or edit after install in $INSTALL_DIR/.env) ──
 HOTSPOT_SSID="${HOTSPOT_SSID:-yingnode}"
 HOTSPOT_IP="${HOTSPOT_IP:-172.16.42.1}"
-HOTSPOT_PASSWORD="${HOTSPOT_PASSWORD:-yingnode123}"
 WIFI_INTERFACE="${WIFI_INTERFACE:-wlan0}"
 PORT="${PORT:-3000}"
 
-# Generate a random secret if not provided
+# Generate random secrets if not provided
+if [ -z "${HOTSPOT_PASSWORD:-}" ]; then
+  # 8-char alphanumeric, lowercase, no confusing chars (0/o, 1/l)
+  HOTSPOT_PASSWORD=$(head -c16 /dev/urandom | tr -dc 'a-z2-9' | head -c8)
+  # Ensure minimum length — if entropy starved, fall back
+  [ ${#HOTSPOT_PASSWORD} -ge 6 ] || HOTSPOT_PASSWORD=$(openssl rand -hex 4 2>/dev/null)
+fi
 if [ -z "${BETTER_AUTH_SECRET:-}" ]; then
   BETTER_AUTH_SECRET=$(openssl rand -base64 32 2>/dev/null || head -c32 /dev/urandom | base64)
 fi

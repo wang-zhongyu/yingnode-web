@@ -4,7 +4,6 @@ import type { ConnectResult } from "@/shared/types/network"
 import { WPA_SOCKET_DIR, WPA_SOCKET_CLI, WPA_CONFIG } from "./constants"
 import type { NetworkServiceState } from "./constants"
 import { getStatus, updateDB } from "./db-status"
-import { HOTSPOT_IFACE } from "./hotspot"
 
 /** Start a standalone wpa_supplicant instance with a known control socket,
  *  independent of NetworkManager. This ensures wpa_cli commands always work
@@ -236,11 +235,8 @@ export async function getReachableIp(state: NetworkServiceState): Promise<string
   const { wifiInterface, hotspotIp } = await state.getConfig()
   const status = await getStatus()
 
-  // In hotspot mode, the IP is on the virtual AP interface (uap0), not wlan0
-  const iface = status.hotspotActive ? HOTSPOT_IFACE : wifiInterface
-
   try {
-    const { stdout } = await execAsync(`ip -4 addr show dev ${safeArg(iface)}`)
+    const { stdout } = await execAsync(`ip -4 addr show dev ${safeArg(wifiInterface)}`)
     const matches = [...stdout.matchAll(/inet (\d+\.\d+\.\d+\.\d+)\/\d+ scope global/g)]
     const ips = matches.map(m => m[1])
 
