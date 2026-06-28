@@ -69,17 +69,8 @@ export async function register() {
       }
     }
 
-    // Ensure the device is always reachable on the fixed IP
-    // ponytail: 30s timeout — dhcpcd hang must not block boot
-    await Promise.race([
-      networkService.ensureStaticIp(),
-      new Promise<void>((resolve) =>
-        setTimeout(() => {
-          console.error("[init] ensureStaticIp timed out after 30s — continuing with DHCP")
-          resolve()
-        }, 30_000),
-      ),
-    ])
+    // Static IP 172.16.42.1 is only bound during hotspot mode (in startHotspotInternal).
+    // If WiFi is unavailable at boot, the monitor will start hotspot immediately.
 
     const { isManualHotspotLocked } = await import("@/shared/lib/hotspot-lock")
     const { startNetworkMonitor } = await import("@/features/network/lib/network-monitor")

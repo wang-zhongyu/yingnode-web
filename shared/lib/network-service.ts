@@ -542,18 +542,13 @@ export class NetworkService {
       await fs.unlink("/tmp/dnsmasq-yingnode.conf")
     } catch { /* ok */ }
 
-    // Keep static IP on interface so device remains reachable
+    // Remove static IP — hotspot is shutting down, WiFi will provide connectivity
     try {
       const { hotspotIp } = await this.getConfig()
-      const { stdout } = await execAsync(
-        `ip -4 addr show dev ${safeArg(wifiInterface)}`,
+      await execAsync(
+        `sudo ip addr del ${hotspotIp}/24 dev ${safeArg(wifiInterface)}`,
       )
-      if (!stdout.includes(hotspotIp)) {
-        await execAsync(
-          `sudo ip addr add ${safeArg(hotspotIp)}/24 dev ${safeArg(wifiInterface)}`,
-        )
-      }
-    } catch { /* non-fatal */ }
+    } catch { /* non-fatal — IP may already be gone */ }
 
     // Restore NM management
     try {
@@ -881,9 +876,8 @@ export class NetworkService {
         console.warn(`[network] dhcpcd failed: ${(e as Error).message}`)
       }
 
-      // Re-add static IP so device is always reachable at 172.16.42.1
-      this.staticIpEnsured = false
-      await this.ensureStaticIp()
+      // Static IP is only for hotspot mode — when on external WiFi,
+      // the device is reachable via its DHCP-assigned IP.
 
       await this.updateDB({ currentSSID: ssid, ipAddress })
 
