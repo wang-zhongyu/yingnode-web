@@ -8,7 +8,7 @@ import { toast } from "sonner"
 import { setupSchema, type SetupInput } from "@/features/auth/schemas/auth.schema"
 import { setupAdminAction } from "@/actions/auth.actions"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
-import { Field, FieldLabel, FieldError } from "@/components/ui/field"
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -25,66 +25,82 @@ export function SetupForm() {
     },
   })
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<SetupInput>({
+  const form = useForm<SetupInput>({
     resolver: zodResolver(setupSchema),
   })
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>初始化设置</CardTitle>
-        <CardDescription>创建管理员账户以开始使用 YingNode</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form
-          id="setup-form"
-          onSubmit={handleSubmit(execute)}
-          className="flex flex-col gap-4"
-        >
-          <Field>
-            <FieldLabel>邮箱</FieldLabel>
-            <Input
-              type="email"
-              placeholder="admin@example.com"
-              autoComplete="email"
-              {...register("email")}
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(execute)}>
+        <Card>
+          <CardHeader>
+            <CardTitle>初始化设置</CardTitle>
+            <CardDescription>创建管理员账户以开始使用 YingNode</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>邮箱</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="email"
+                      placeholder="admin@example.com"
+                      autoComplete="email"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            <FieldError errors={errors.email ? [errors.email] : undefined} />
-          </Field>
-          <Field>
-            <FieldLabel>密码</FieldLabel>
-            <Input
-              type="password"
-              placeholder="至少 8 位"
-              autoComplete="new-password"
-              {...register("password")}
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>密码</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      placeholder="至少 8 位"
+                      autoComplete="new-password"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            <FieldError errors={errors.password ? [errors.password] : undefined} />
-          </Field>
-          <Field>
-            <FieldLabel>确认密码</FieldLabel>
-            <Input
-              type="password"
-              placeholder="再次输入密码"
-              autoComplete="new-password"
-              {...register("confirmPassword")}
+            <FormField
+              control={form.control}
+              name="confirmPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>确认密码</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      placeholder="再次输入密码"
+                      autoComplete="new-password"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            <FieldError
-              errors={errors.confirmPassword ? [errors.confirmPassword] : undefined}
-            />
-          </Field>
-        </form>
-      </CardContent>
-      <CardFooter>
-        <Button type="submit" form="setup-form" className="w-full" disabled={isPending}>
-          {isPending ? <Spinner data-icon="inline-start" /> : null}
-          创建管理员账户
-        </Button>
-      </CardFooter>
-    </Card>
+          </CardContent>
+          <CardFooter>
+            <Button type="submit" className="w-full" disabled={isPending}>
+              {isPending ? <Spinner data-icon="inline-start" /> : null}
+              创建管理员账户
+            </Button>
+          </CardFooter>
+        </Card>
+      </form>
+    </Form>
   )
 }

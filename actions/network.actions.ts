@@ -1,6 +1,7 @@
 "use server"
 
-import { actionClient } from "@/shared/lib/safe-action"
+import { z } from "zod"
+import { actionClient, authActionClient } from "@/shared/lib/safe-action"
 import { manualAddSchema } from "@/features/network/schemas/network.schema"
 import { networkService } from "@/shared/lib/network-service"
 import { setManualHotspotLock } from "@/shared/lib/hotspot-lock"
@@ -70,4 +71,21 @@ export const connectFromHotspotAction = actionClient
     } finally {
       setManualHotspotLock(false)
     }
+  })
+
+export const reconnectWiFiAction = authActionClient
+  .schema(z.object({ id: z.number() }))
+  .action(async ({ parsedInput: { id } }) => {
+    const records = await networkService.getSavedWiFi()
+    const target = records.find((r) => r.id === id)
+    if (!target || target.networkId == null) {
+      throw new Error("网络配置已失效，请重新输入密码连接")
+    }
+    return networkService.reconnectViaNetworkId(target.networkId, target.ssid)
+  })
+
+export const forgetWiFiAction = authActionClient
+  .schema(z.object({ id: z.number() }))
+  .action(async ({ parsedInput: { id } }) => {
+    return networkService.forgetWiFi(id)
   })

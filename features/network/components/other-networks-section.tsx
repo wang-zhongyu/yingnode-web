@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { ChevronRight } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import type { WiFiNetwork } from "@/shared/types/network"
 import { WiFiListItem } from "./wifi-list-item"
 
@@ -17,14 +18,14 @@ export function OtherNetworksSection({ networks, onConnect }: OtherNetworksSecti
 
   if (!open) {
     return (
-      <button
-        type="button"
-        className="flex w-full items-center px-2 py-1.5 text-sm hover:bg-accent rounded-md"
+      <Button
+        variant="ghost"
+        className="w-full justify-start"
         onClick={() => setOpen(true)}
       >
         <span>其他网络...</span>
         <ChevronRight className="ml-auto size-4" />
-      </button>
+      </Button>
     )
   }
 

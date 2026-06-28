@@ -15,6 +15,7 @@ export function CurrentStatus({
   reachableIp,
 }: CurrentStatusProps) {
   const appUrl = reachableIp ? `http://${reachableIp}:3000` : null
+  const accessText = appUrl ? `访问 ${appUrl}` : `IP: ${reachableIp}`
 
   if (status === "HOTSPOT_ACTIVE") {
     return (
@@ -23,7 +24,7 @@ export function CurrentStatus({
         <div>
           <p className="text-sm font-medium">热点已开启</p>
           <p className="text-xs text-muted-foreground">
-            广播 SSID: yingnode · {appUrl ? `访问 ${appUrl}` : `IP: ${reachableIp}`}
+            广播 SSID: yingnode · {accessText}
           </p>
         </div>
       </div>
@@ -43,6 +44,7 @@ export function CurrentStatus({
   }
 
   const connectedSSID = currentSSID ?? "已连接"
+  const onlineAccessText = appUrl ? ` · 访问 ${appUrl}` : ""
 
   return (
     <div className="flex items-center gap-2 px-2 py-1.5">
@@ -50,7 +52,7 @@ export function CurrentStatus({
       <div>
         <p className="text-sm font-medium">已连接 &quot;{connectedSSID}&quot;</p>
         <p className="text-xs text-muted-foreground">
-          互联网：已连接{appUrl ? ` · 访问 ${appUrl}` : ""}
+          互联网：已连接{onlineAccessText}
         </p>
       </div>
     </div>

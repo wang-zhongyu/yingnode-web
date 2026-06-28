@@ -6,15 +6,28 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { SpinnerEmpty } from "@/shared/components/spinner-empty"
 import { ListEmpty } from "@/shared/components/list-empty"
+import { usePolling } from "@/shared/hooks/use-polling"
 import type { DockerContainer, ContainerAction } from "@/shared/types/docker"
 import { ContainerLogsSheet } from "./container-logs-sheet"
 import { PlayIcon, SquareIcon, RotateCwIcon, FileTextIcon } from "lucide-react"
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table"
 
 const STATE_LABELS: Record<string, string> = {
   running: "运行中",
   stopped: "已停止",
   paused: "已暂停",
   restarting: "重启中",
+}
+
+function stateVariant(state: string): "default" | "secondary" {
+  return state === "running" ? "default" : "secondary"
 }
 
 export function ContainerList({
@@ -24,26 +37,16 @@ export function ContainerList({
   initialContainers: DockerContainer[]
   initialDockerAvailable: boolean
 }) {
-  const [containers, setContainers] = useState<DockerContainer[]>(initialContainers)
-  const [loading, setLoading] = useState(false)
-  const [dockerAvailable, setDockerAvailable] = useState(initialDockerAvailable)
+  const [version, setVersion] = useState(0)
+  const { data, isLoading: loading } = usePolling<{
+    containers: DockerContainer[]
+    dockerAvailable: boolean
+  }>(`/api/docker/containers?_=${version}`, 0)
   const [logsId, setLogsId] = useState<string | null>(null)
 
-  async function fetchContainers() {
-    setLoading(true)
-    try {
-      const res = await fetch("/api/docker/containers")
-      if (!res.ok) throw new Error("Failed")
-      const data = await res.json()
-      setContainers(data.containers)
-      setDockerAvailable(data.dockerAvailable !== false)
-    } catch {
-      toast.error("无法获取 Docker 容器列表")
-      setDockerAvailable(false)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // ponytail: use server-rendered initial data while client fetch is in flight
+  const containers = data?.containers ?? initialContainers
+  const dockerAvailable = data?.dockerAvailable ?? initialDockerAvailable
 
   async function handleAction(id: string, action: ContainerAction) {
     try {
@@ -53,11 +56,15 @@ export function ContainerList({
         body: JSON.stringify({ action }),
       })
       if (!res.ok) throw new Error("Failed")
-      const labels: Record<ContainerAction, string> = { start: "启动", stop: "停止", restart: "重启" }
+      const labels: Record<ContainerAction, string> = {
+        start: "启动",
+        stop: "停止",
+        restart: "重启",
+      }
       toast.success(`容器已${labels[action]}`)
-      fetchContainers()
+      setVersion((v) => v + 1)
     } catch {
-      toast.error(`操作失败`)
+      toast.error("操作失败")
     }
   }
 
@@ -73,32 +80,28 @@ export function ContainerList({
     <>
       <div className="rounded-lg border">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="px-4 py-3 text-left font-medium">名称</th>
-                <th className="px-4 py-3 text-left font-medium">镜像</th>
-                <th className="px-4 py-3 text-left font-medium">状态</th>
-                <th className="px-4 py-3 text-left font-medium">端口</th>
-                <th className="px-4 py-3 text-right font-medium">操作</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>名称</TableHead>
+                <TableHead>镜像</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead>端口</TableHead>
+                <TableHead className="text-right">操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {containers.map((c) => (
-                <tr key={c.id} className="border-b last:border-0">
-                  <td className="px-4 py-3 font-medium">{c.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{c.image}</td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      variant={c.state === "running" ? "default" : "secondary"}
-                    >
+                <TableRow key={c.id}>
+                  <TableCell><span className="font-medium">{c.name}</span></TableCell>
+                  <TableCell><span className="text-muted-foreground text-xs">{c.image}</span></TableCell>
+                  <TableCell>
+                    <Badge variant={stateVariant(c.state)}>
                       {STATE_LABELS[c.state] ?? c.state}
                     </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
-                    {c.ports || "-"}
-                  </td>
-                  <td className="px-4 py-3">
+                  </TableCell>
+                  <TableCell><span className="text-muted-foreground font-mono text-xs">{c.ports || "-"}</span></TableCell>
+                  <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       {c.state === "running" ? (
                         <Button
@@ -137,11 +140,11 @@ export function ContainerList({
                         <FileTextIcon className="size-4" />
                       </Button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
       <ContainerLogsSheet

@@ -17,7 +17,7 @@ export function SettingsSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="px-4 py-3">
+      <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={() => router.push("/monitoring")}>

@@ -37,12 +37,12 @@ export function DiskPartitionTable() {
         <TableBody>
           {partitions.map((p) => (
             <TableRow key={`${p.filesystem}-${p.mountedOn}`}>
-              <TableCell className="max-w-[150px] truncate font-medium" title={p.filesystem}>{p.filesystem}</TableCell>
+              <TableCell className="max-w-[150px]" title={p.filesystem}><span className="truncate font-medium">{p.filesystem}</span></TableCell>
               <TableCell>{p.size}</TableCell>
               <TableCell>{p.used}</TableCell>
               <TableCell>{p.available}</TableCell>
               <TableCell>{p.usePercent}</TableCell>
-              <TableCell className="max-w-[200px] truncate" title={p.mountedOn}>{p.mountedOn}</TableCell>
+              <TableCell className="max-w-[200px]" title={p.mountedOn}><span className="truncate">{p.mountedOn}</span></TableCell>
             </TableRow>
           ))}
         </TableBody>

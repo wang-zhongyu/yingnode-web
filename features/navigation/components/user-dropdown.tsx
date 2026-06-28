@@ -41,7 +41,7 @@ export function UserDropdown() {
             <DropdownMenuLabel>账户</DropdownMenuLabel>
           </DropdownMenuGroup>
           <DropdownMenuGroup>
-            <DropdownMenuItem className="text-muted-foreground text-xs">
+            <DropdownMenuItem>
               {email}
             </DropdownMenuItem>
           </DropdownMenuGroup>

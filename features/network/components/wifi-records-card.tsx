@@ -2,10 +2,9 @@
 
 import { useState, useCallback } from "react"
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Plus } from "lucide-react"
-import { useModalStore } from "@/shared/stores/use-modal-store"
+import { ModalButton } from "@/shared/components/modal-button"
 import { WiFiRecordItem } from "./wifi-record-item"
 import type { WiFiRecordItem as WiFiRecordItemType } from "@/shared/types/network"
 
@@ -15,7 +14,6 @@ interface WiFiRecordsCardProps {
 
 export function WiFiRecordsCard({ initialRecords }: WiFiRecordsCardProps) {
   const [records, setRecords] = useState<WiFiRecordItemType[]>(initialRecords)
-  const { open } = useModalStore()
 
   const fetchRecords = useCallback(async () => {
     try {
@@ -39,10 +37,7 @@ export function WiFiRecordsCard({ initialRecords }: WiFiRecordsCardProps) {
           </p>
         </CardContent>
         <CardFooter>
-          <Button variant="outline" size="sm" onClick={() => open("manualAddNetwork")}>
-            <Plus className="size-4" data-icon="inline-start" />
-            添加
-          </Button>
+          <ModalButton modalType="manualAddNetwork" label="添加" icon={Plus} variant="outline" size="sm" />
         </CardFooter>
       </Card>
     )
@@ -62,10 +57,7 @@ export function WiFiRecordsCard({ initialRecords }: WiFiRecordsCardProps) {
         ))}
       </CardContent>
       <CardFooter>
-        <Button variant="outline" size="sm" onClick={() => open("manualAddNetwork")}>
-          <Plus className="size-4" data-icon="inline-start" />
-          添加
-        </Button>
+        <ModalButton modalType="manualAddNetwork" label="添加" icon={Plus} variant="outline" size="sm" />
       </CardFooter>
     </Card>
   )

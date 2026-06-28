@@ -8,7 +8,7 @@ import { toast } from "sonner"
 import { signIn } from "@/shared/lib/auth-client"
 import { signInSchema, type SignInInput } from "@/features/auth/schemas/auth.schema"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
-import { Field, FieldLabel, FieldError } from "@/components/ui/field"
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -17,11 +17,7 @@ export function LoginForm() {
   const [isPending, setIsPending] = useState(false)
   const router = useRouter()
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<SignInInput>({
+  const form = useForm<SignInInput>({
     resolver: zodResolver(signInSchema),
   })
 
@@ -48,45 +44,59 @@ export function LoginForm() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>登录</CardTitle>
-        <CardDescription>使用管理员账户登录 YingNode</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form
-          id="login-form"
-          onSubmit={handleSubmit(onSubmit)}
-          className="flex flex-col gap-4"
-        >
-          <Field>
-            <FieldLabel>邮箱</FieldLabel>
-            <Input
-              type="email"
-              placeholder="admin@example.com"
-              autoComplete="email"
-              {...register("email")}
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)}>
+        <Card>
+          <CardHeader>
+            <CardTitle>登录</CardTitle>
+            <CardDescription>使用管理员账户登录 YingNode</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>邮箱</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="email"
+                      placeholder="admin@example.com"
+                      autoComplete="email"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            <FieldError errors={errors.email ? [errors.email] : undefined} />
-          </Field>
-          <Field>
-            <FieldLabel>密码</FieldLabel>
-            <Input
-              type="password"
-              placeholder="请输入密码"
-              autoComplete="current-password"
-              {...register("password")}
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>密码</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      placeholder="请输入密码"
+                      autoComplete="current-password"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            <FieldError errors={errors.password ? [errors.password] : undefined} />
-          </Field>
-        </form>
-      </CardContent>
-      <CardFooter>
-        <Button type="submit" form="login-form" className="w-full" disabled={isPending}>
-          {isPending ? <Spinner data-icon="inline-start" /> : null}
-          登录
-        </Button>
-      </CardFooter>
-    </Card>
+          </CardContent>
+          <CardFooter>
+            <Button type="submit" className="w-full" disabled={isPending}>
+              {isPending ? <Spinner data-icon="inline-start" /> : null}
+              登录
+            </Button>
+          </CardFooter>
+        </Card>
+      </form>
+    </Form>
   )
 }

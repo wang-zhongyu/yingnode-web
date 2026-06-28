@@ -36,11 +36,13 @@ export function AppCard({ app, onRefresh }: Props) {
       })
       const data = await res.json()
       if (data.success) {
-        toast.success(action === "install" ? "安装成功" : "卸载成功")
+        const label = action === "install" ? "安装" : "卸载"
+        toast.success(`${label}成功`)
         onRefresh()
       } else {
+        const label = action === "install" ? "安装" : "卸载"
         const detail = data.output ? `\n${data.output.slice(-500)}` : ""
-        toast.error(`${action === "install" ? "安装" : "卸载"}失败${detail}`, { duration: 10000 })
+        toast.error(`${label}失败${detail}`, { duration: 10000 })
       }
     } catch {
       toast.error("操作失败")
@@ -49,8 +51,32 @@ export function AppCard({ app, onRefresh }: Props) {
     }
   }
 
+  function renderActionButton() {
+    if (app.installed) {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={acting || !app.uninstall}
+          onClick={() => handleAction("uninstall")}
+        >
+          {acting && <Spinner data-icon="inline-start" />}
+          卸载
+        </Button>
+      )
+    }
+
+    return (
+      <Button size="sm" disabled={acting} onClick={() => handleAction("install")}>
+        {acting && <Spinner data-icon="inline-start" />}
+        安装
+      </Button>
+    )
+  }
+
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    <Card>
+      <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">
           <Icon className="size-5 text-muted-foreground" />
@@ -63,22 +89,8 @@ export function AppCard({ app, onRefresh }: Props) {
       <p className="text-sm text-muted-foreground">{app.description}</p>
       <div className="mt-auto flex items-center justify-between">
         <span className="text-xs text-muted-foreground">{app.category}</span>
-        {app.installed ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={acting || !app.uninstall}
-            onClick={() => handleAction("uninstall")}
-          >
-            {acting ? <Spinner data-icon="inline-start" /> : null}
-            卸载
-          </Button>
-        ) : (
-          <Button size="sm" disabled={acting} onClick={() => handleAction("install")}>
-            {acting ? <Spinner data-icon="inline-start" /> : null}
-            安装
-          </Button>
-        )}
+        {renderActionButton()}
+      </div>
       </div>
     </Card>
   )

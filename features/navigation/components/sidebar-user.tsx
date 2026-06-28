@@ -45,7 +45,6 @@ export function SidebarUser() {
         </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
-            className="text-muted-foreground"
             onClick={() => setLogoutOpen(true)}
           >
             <LogOut />

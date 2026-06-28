@@ -3,7 +3,7 @@ import { SetupForm } from "@/features/auth/components/setup-form"
 
 export default function SetupPage() {
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">
+    <>
       {/* Branding */}
       <div className="flex flex-col items-center gap-2 text-center">
         <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
@@ -19,6 +19,6 @@ export default function SetupPage() {
       <div className="w-full max-w-sm">
         <SetupForm />
       </div>
-    </div>
+    </>
   )
 }

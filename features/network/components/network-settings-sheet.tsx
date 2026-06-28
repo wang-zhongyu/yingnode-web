@@ -35,13 +35,7 @@ export function NetworkSettingsSheet() {
         <div className="flex flex-col gap-4 px-4 mt-4">
           <InfoRow
             label="状态"
-            value={
-              status?.status === "ONLINE"
-                ? "已连接互联网"
-                : status?.status === "HOTSPOT_ACTIVE"
-                  ? "热点模式"
-                  : "离线"
-            }
+            value={getStatusLabel(status?.status)}
           />
           <InfoRow label="接口" value={status?.wifiInterface ?? "—"} />
           <InfoRow label="IP 地址" value={status?.reachableIp ?? "—"} />
@@ -70,6 +64,12 @@ export function NetworkSettingsSheet() {
       </SheetContent>
     </Sheet>
   )
+}
+
+function getStatusLabel(status: string | undefined): string {
+  if (status === "ONLINE") return "已连接互联网"
+  if (status === "HOTSPOT_ACTIVE") return "热点模式"
+  return "离线"
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {

@@ -25,7 +25,8 @@ export function ProcessesTab() {
 
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardContent>
+        <div className="pt-6">
         <div className="overflow-x-auto">
           <Table>
         <TableHeader>
@@ -40,7 +41,7 @@ export function ProcessesTab() {
         <TableBody>
           {processes.map((p: ProcessInfo) => (
             <TableRow key={p.pid}>
-              <TableCell className="max-w-[200px] truncate font-medium" title={p.name}>{p.name}</TableCell>
+              <TableCell className="max-w-[200px]" title={p.name}><span className="truncate font-medium">{p.name}</span></TableCell>
               <TableCell>{p.pid}</TableCell>
               <TableCell>{p.user}</TableCell>
               <TableCell>{p.cpu.toFixed(1)}</TableCell>
@@ -49,6 +50,7 @@ export function ProcessesTab() {
           ))}
         </TableBody>
       </Table>
+        </div>
         </div>
       </CardContent>
     </Card>

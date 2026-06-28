@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -9,61 +8,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useModalStore } from "@/shared/stores/use-modal-store"
+import { useTerminalUrl } from "@/features/terminal/hooks/use-terminal-url"
 
 export function TerminalModal() {
   const { type, isOpen, close } = useModalStore()
-  const [url, setUrl] = useState("")
-  const [error, setError] = useState(false)
-
-  useEffect(() => {
-    if (!isOpen || type !== "terminal") return
-    const controller = new AbortController()
-
-    async function fetchUrl() {
-      setUrl("")
-      setError(false)
-      try {
-        const tokenRes = await fetch("/api/terminal/token", { signal: controller.signal })
-        const { url: baseUrl, token } = await tokenRes.json()
-
-        const authRes = await fetch("/api/terminal/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-          signal: controller.signal,
-        })
-
-        if (!authRes.ok) {
-          setUrl("")
-          setError(true)
-          return
-        }
-
-        const { auth } = await authRes.json()
-
-        if (!auth) {
-          setUrl("")
-          setError(true)
-          return
-        }
-        const authUrl = baseUrl.replace("://", `://${auth}@`)
-        setUrl(authUrl)
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") return
-        setUrl("")
-        setError(true)
-      }
-    }
-    fetchUrl()
-    return () => controller.abort()
-  }, [isOpen, type])
+  const { url, error } = useTerminalUrl(isOpen, type)
 
   if (type !== "terminal") return null
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) close() }}>
       <DialogContent
-        className="inset-[3%] max-w-none w-[94%] h-[94%] translate-x-0 translate-y-0 p-0 flex flex-col gap-0"
+        className="inset-[3%] max-w-none w-[94%] h-[94%] translate-x-0 translate-y-0 flex flex-col"
         showCloseButton
       >
         <DialogHeader>
@@ -76,7 +32,7 @@ export function TerminalModal() {
   )
 }
 
-function TerminalBody({ url, error }: { url: string; error: boolean }) {
+function TerminalBody({ url, error }: { url: string | null; error: boolean }) {
   if (url) {
     return <iframe src={url} className="flex-1 border-0" title="终端" sandbox="allow-same-origin allow-scripts" />
   }

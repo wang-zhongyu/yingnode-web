@@ -16,6 +16,7 @@ interface AlertDialogRootProps {
   onOpenChange: (open: boolean) => void
   title: string
   description?: string
+  children?: React.ReactNode
   confirmLabel?: string
   cancelLabel?: string
   isPending?: boolean
@@ -28,6 +29,7 @@ export function AlertDialogRoot({
   onOpenChange,
   title,
   description,
+  children,
   confirmLabel = "确认",
   cancelLabel = "取消",
   isPending = false,
@@ -43,6 +45,7 @@ export function AlertDialogRoot({
             <AlertDialogDescription>{description}</AlertDialogDescription>
           ) : null}
         </AlertDialogHeader>
+        {children}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>
             {cancelLabel}

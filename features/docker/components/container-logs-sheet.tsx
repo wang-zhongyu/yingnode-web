@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { useContainerLogs } from "@/features/docker/hooks/use-container-logs"
 
 interface Props {
   containerId: string
@@ -10,21 +10,11 @@ interface Props {
 }
 
 export function ContainerLogsSheet({ containerId, open, onClose }: Props) {
-  const [logs, setLogs] = useState("")
-
-  useEffect(() => {
-    if (!open) return
-    async function fetchLogs() {
-      const res = await fetch(`/api/docker/containers/${containerId}`)
-      const data = await res.json()
-      setLogs(data.logs ?? "")
-    }
-    fetchLogs()
-  }, [containerId, open])
+  const logs = useContainerLogs(containerId, open)
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <SheetContent side="bottom" className="h-[70vh] p-0" showCloseButton={false}>
+      <SheetContent side="bottom" className="h-[70vh]" showCloseButton={false}>
         <SheetHeader className="flex-row items-center justify-between border-b px-4 py-2">
           <SheetTitle>容器日志</SheetTitle>
         </SheetHeader>

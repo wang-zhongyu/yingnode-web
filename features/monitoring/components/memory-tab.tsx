@@ -30,7 +30,8 @@ function TopMemoryProcesses() {
 
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardContent>
+        <div className="pt-6">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -44,7 +45,7 @@ function TopMemoryProcesses() {
             <TableBody>
               {processes.map((p) => (
                 <TableRow key={p.pid}>
-                  <TableCell className="max-w-[200px] truncate font-medium" title={p.name}>{p.name}</TableCell>
+                  <TableCell className="max-w-[200px]" title={p.name}><span className="truncate font-medium">{p.name}</span></TableCell>
                   <TableCell>{p.pid}</TableCell>
                   <TableCell>{p.mem.toFixed(1)}%</TableCell>
                   <TableCell>{p.cpu.toFixed(1)}%</TableCell>
@@ -52,6 +53,7 @@ function TopMemoryProcesses() {
               ))}
             </TableBody>
           </Table>
+        </div>
         </div>
       </CardContent>
     </Card>

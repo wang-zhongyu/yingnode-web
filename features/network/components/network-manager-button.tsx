@@ -3,45 +3,29 @@
 import { useEffect, useRef, useState } from "react"
 import { Popover, PopoverTrigger } from "@/components/ui/popover"
 import { Wifi, WifiOff, Radio, Loader2 } from "lucide-react"
+import { usePolling } from "@/shared/hooks/use-polling"
 import { NetworkPopover } from "./network-popover"
 import { IpChangeAlertDialog } from "./ip-change-alert-dialog"
 import type { NetworkStatus } from "@/shared/types/network"
 
 export function NetworkManagerButton() {
-  const [status, setStatus] = useState<NetworkStatus | null>(null)
-  const [error, setError] = useState(false)
+  const { data: status, error } = usePolling<NetworkStatus>(
+    "/api/network/status",
+    10_000,
+  )
   const [dialogUrl, setDialogUrl] = useState<string | null>(null)
   const prevIpRef = useRef<string | null | undefined>(undefined)
 
   useEffect(() => {
-    let cancelled = false
-    async function poll() {
-      try {
-        const res = await fetch("/api/network/status")
-        if (!res.ok) throw new Error("Failed")
-        const data = (await res.json()) as NetworkStatus
-        if (cancelled) return
-        setStatus(data)
-        setError(false)
-
-        const currentIp = data.reachableIp ?? data.ipAddress
-        if (prevIpRef.current !== undefined && currentIp && currentIp !== prevIpRef.current) {
-          const port = window.location.port
-          const url = port ? `http://${currentIp}:${port}` : `http://${currentIp}`
-          setDialogUrl(url)
-        }
-        prevIpRef.current = currentIp
-      } catch {
-        if (!cancelled) setError(true)
-      }
+    if (!status) return
+    const currentIp = status.reachableIp ?? status.ipAddress
+    if (prevIpRef.current !== undefined && currentIp && currentIp !== prevIpRef.current) {
+      const port = window.location.port
+      const url = port ? `http://${currentIp}:${port}` : `http://${currentIp}`
+      setDialogUrl(url)
     }
-    poll()
-    const interval = setInterval(poll, 10_000)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [])
+    prevIpRef.current = currentIp
+  }, [status])
 
   function buttonContent() {
     if (error) {

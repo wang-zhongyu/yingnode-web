@@ -1,14 +1,16 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 import { PopoverContent } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { useAction } from "next-safe-action/hooks"
 import { SpinnerEmpty } from "@/shared/components/spinner-empty"
 import { ListEmpty } from "@/shared/components/list-empty"
-import type { NetworkStatus, WiFiNetwork } from "@/shared/types/network"
+import type { NetworkStatus } from "@/shared/types/network"
 import { useModalStore } from "@/shared/stores/use-modal-store"
+import { usePolling } from "@/shared/hooks/use-polling"
+import { useWiFiScan } from "@/features/network/hooks/use-wifi-scan"
 import { connectWiFiAction } from "@/actions/network.actions"
 import { CurrentStatus } from "./current-status"
 import { WiFiList } from "./wifi-list"
@@ -17,14 +19,14 @@ import { NetworkSettingsEntry } from "./network-settings-entry"
 import { ConnectFromHotspotEntry } from "./connect-from-hotspot-entry"
 
 export function NetworkPopover() {
-  const [status, setStatus] = useState<NetworkStatus | null>(null)
-  const [networks, setNetworks] = useState<WiFiNetwork[]>([])
-  const [scanning, setScanning] = useState(false)
-  const [statusError, setStatusError] = useState(false)
+  const { data: status, error: statusError, isLoading } = usePolling<NetworkStatus>(
+    "/api/network/status",
+    0,
+  )
+  const { networks, scanning, scan } = useWiFiScan()
   const openModal = useModalStore((s) => s.open)
   const { execute } = useAction(connectWiFiAction, {
     onSuccess({ data }) {
-      fetchStatus()
       // ponytail: show new IP when connecting from hotspot (reachableIp only set there)
       const extra = data as unknown as Record<string, unknown> | null
       const reachableIp = extra?.reachableIp as string | undefined
@@ -46,50 +48,11 @@ export function NetworkPopover() {
   })
 
   useEffect(() => {
-    async function load() {
-      const currentSSID = await fetchStatus()
-      fetchScan(currentSSID)
-    }
-    load()
-  }, [])
-
-  async function fetchStatus() {
-    try {
-      const res = await fetch("/api/network/status")
-      if (!res.ok) throw new Error("Failed")
-      const data = await res.json()
-      setStatus(data)
-      setStatusError(false)
-      return data.currentSSID as string | null
-    } catch {
-      setStatusError(true)
-      return null
-    }
-  }
-
-  async function fetchScan(currentSSID: string | null) {
-    setScanning(true)
-    try {
-      const res = await fetch("/api/network/scan")
-      if (!res.ok) throw new Error("扫描失败")
-      const data = await res.json()
-      const networks: WiFiNetwork[] = currentSSID
-        ? data.networks.map((n: WiFiNetwork) =>
-            n.ssid === currentSSID ? { ...n, connected: true } : n,
-          )
-        : data.networks
-      setNetworks(networks)
-    } catch {
-      toast.error("无法扫描网络，请检查无线网卡")
-    } finally {
-      setScanning(false)
-    }
-  }
+    scan(status?.currentSSID ?? null)
+  }, [status, scan])
 
   async function handleConnect(ssid: string, hasPassword: boolean) {
     if (!hasPassword) {
-      // ponytail: route OPEN networks through connectWiFiAction so hotspot
-      // stop / NM remanage / interface-ready logic runs before wpa_cli commands
       execute({ ssid, password: "", security: "OPEN" })
       return
     }
@@ -97,7 +60,23 @@ export function NetworkPopover() {
     openModal("manualAddNetwork", { ssid })
   }
 
-  if (!status && !statusError) {
+  function renderNetworkList() {
+    if (scanning) return <SpinnerEmpty message="正在扫描网络..." />
+    if (networks.length === 0) {
+      const message = effectiveStatus.hotspotActive
+        ? "热点模式下无法扫描网络"
+        : "未发现可用网络"
+      return <ListEmpty message={message} />
+    }
+    return (
+      <>
+        <WiFiList networks={networks} onConnect={handleConnect} />
+        <Separator />
+      </>
+    )
+  }
+
+  if (isLoading) {
     return (
       <PopoverContent className="w-80 p-0 gap-0">
         <SpinnerEmpty message="加载中..." />
@@ -126,22 +105,7 @@ export function NetworkPopover() {
           <Separator />
         </>
       )}
-      {scanning ? (
-        <SpinnerEmpty message="正在扫描网络..." />
-      ) : networks.length === 0 ? (
-        <ListEmpty
-          message={
-            effectiveStatus.hotspotActive
-              ? "热点模式下无法扫描网络"
-              : "未发现可用网络"
-          }
-        />
-      ) : (
-        <>
-          <WiFiList networks={networks} onConnect={handleConnect} />
-          <Separator />
-        </>
-      )}
+      {renderNetworkList()}
       <ManualAddItem />
       <Separator />
       <NetworkSettingsEntry />

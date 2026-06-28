@@ -1,6 +1,7 @@
 "use client"
 
 import { Lock, ShieldAlert } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import type { WiFiNetwork } from "@/shared/types/network"
 
 interface WiFiListItemProps {
@@ -22,13 +23,17 @@ function securityIcon(security: string) {
   return <Lock className="size-3.5 text-muted-foreground" />
 }
 
+function bandLabel(frequency: number): string {
+  return frequency >= 5 ? "5G" : "2.4G"
+}
+
 export function WiFiListItem({ network, onConnect }: WiFiListItemProps) {
   const bars = signalBars(network.signal)
 
   return (
-    <button
-      type="button"
-      className="flex w-full items-center justify-between rounded-md px-2 py-1.5 hover:bg-accent"
+    <Button
+      variant="ghost"
+      className="w-full justify-between"
       onClick={() => onConnect(network.ssid, network.security !== "OPEN")}
     >
       <div className="flex items-center gap-2">
@@ -36,7 +41,7 @@ export function WiFiListItem({ network, onConnect }: WiFiListItemProps) {
         <span className="text-sm">{network.ssid}</span>
         {network.frequency ? (
           <span className="text-xs text-muted-foreground font-mono">
-            {network.frequency >= 5 ? "5G" : "2.4G"}
+            {bandLabel(network.frequency)}
           </span>
         ) : null}
       </div>
@@ -44,7 +49,7 @@ export function WiFiListItem({ network, onConnect }: WiFiListItemProps) {
         {securityIcon(network.security)}
         {network.connected && <span className="text-xs text-muted-foreground">✅</span>}
       </div>
-    </button>
+    </Button>
   )
 }
 
