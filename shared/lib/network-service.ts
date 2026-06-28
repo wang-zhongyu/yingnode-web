@@ -255,6 +255,19 @@ export class NetworkService {
   private startingHotspot = false
   lastHotspotError: string | null = null
 
+  /** Restore NM management after a brief offline period where NM was unmanaged
+   *  to prevent auto-reconnect, but WiFi reconnected before hotspot started. */
+  async remanageNM(): Promise<void> {
+    const { wifiInterface } = await this.getConfig()
+    try {
+      await execAsync("systemctl is-active --quiet NetworkManager")
+      await execAsync(
+        `sudo nmcli device set ${safeArg(wifiInterface)} managed yes 2>/dev/null || true`,
+      )
+      console.log(`[network] NM remanaged ${wifiInterface}`)
+    } catch { /* NM not running */ }
+  }
+
   /** Unmanage WiFi interface from NetworkManager to prevent auto-reconnect
    *  while counting offline ticks toward hotspot start. */
   async unmanageNM(): Promise<void> {

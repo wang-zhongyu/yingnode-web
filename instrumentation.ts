@@ -30,6 +30,16 @@ export async function register() {
           5000,
         )
         console.log("[init] Restored NM management for WiFi interface")
+        // Reset stale DB state from previous crash — hostapd is dead
+        try {
+          const { prisma } = await import("@/shared/lib/prisma")
+          await prisma.networkStatus.upsert({
+            where: { id: 1 },
+            update: { status: "ONLINE", hotspotActive: false },
+            create: { id: 1, status: "ONLINE", hotspotActive: false },
+          })
+          console.log("[init] Reset stale DB status to ONLINE")
+        } catch { /* non-fatal */ }
       } else {
         console.log("[init] Hotspot is active, skipping NM recovery")
       }
@@ -77,7 +87,7 @@ function startNetworkMonitor(
   networkService: Pick<
     NetworkService,
     "isWiFiAssociated" | "checkConnectivity" | "getStatus" |
-    "startHotspot" | "stopHotspot" | "updateDB" | "unmanageNM"
+    "startHotspot" | "stopHotspot" | "updateDB" | "unmanageNM" | "remanageNM"
   >,
   isManualHotspotLocked: () => boolean,
 ) {
@@ -106,8 +116,9 @@ function startNetworkMonitor(
 
       if (associated) {
         // WiFi is connected to an AP — verify internet access.
-        // Restore NM management in case it was unmanaged by a prior offline tick.
+        // WiFi reconnected — restore NM if it was unmanaged during offline period
         if (offlineTicks > 0) {
+          networkService.remanageNM().catch(() => {})
           networkService.updateDB({ status: "ONLINE" }).catch(() => {})
         }
         offlineTicks = 0
