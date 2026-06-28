@@ -12,9 +12,9 @@ interface OtherNetworksSectionProps {
 }
 
 export function OtherNetworksSection({ networks, onConnect }: OtherNetworksSectionProps) {
-  if (networks.length === 0) return null
-
   const [open, setOpen] = useState(false)
+
+  if (networks.length === 0) return null
 
   if (!open) {
     return (

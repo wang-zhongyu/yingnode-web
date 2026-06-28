@@ -9,23 +9,21 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu"
-import { SunIcon, MoonIcon, MonitorIcon, type LucideIcon } from "lucide-react"
+import { SunIcon, MoonIcon, MonitorIcon } from "lucide-react"
 
-function getThemeIcon(theme: string | undefined): LucideIcon {
-  if (theme === "dark") return MoonIcon
-  if (theme === "light") return SunIcon
-  return MonitorIcon
+function ThemeIcon({ theme }: { theme: string | undefined }) {
+  if (theme === "dark") return <MoonIcon className="size-5" />
+  if (theme === "light") return <SunIcon className="size-5" />
+  return <MonitorIcon className="size-5" />
 }
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
 
-  const Icon = getThemeIcon(theme)
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
-        <Icon className="size-5" />
+        <ThemeIcon theme={theme} />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>

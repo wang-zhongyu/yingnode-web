@@ -31,7 +31,7 @@ export async function GET() {
   let auth: string
   try {
     auth = getTtydAuth()
-  } catch (err) {
+  } catch {
     return NextResponse.json(
       { error: "Terminal not configured" },
       { status: 500 },

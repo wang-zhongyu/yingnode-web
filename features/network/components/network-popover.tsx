@@ -19,7 +19,7 @@ import { NetworkSettingsEntry } from "./network-settings-entry"
 import { ConnectFromHotspotEntry } from "./connect-from-hotspot-entry"
 
 export function NetworkPopover() {
-  const { data: status, error: statusError, isLoading } = usePolling<NetworkStatus>(
+  const { data: status, isLoading } = usePolling<NetworkStatus>(
     "/api/network/status",
     0,
   )
@@ -92,7 +92,6 @@ export function NetworkPopover() {
       <CurrentStatus
         status={effectiveStatus.status}
         currentSSID={effectiveStatus.currentSSID}
-        hotspotActive={effectiveStatus.hotspotActive}
         reachableIp={status?.reachableIp ?? null}
       />
       <Separator />

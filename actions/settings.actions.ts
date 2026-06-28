@@ -1,6 +1,6 @@
 "use server"
 
-import { actionClient, authActionClient } from "@/shared/lib/safe-action"
+import { authActionClient } from "@/shared/lib/safe-action"
 import { deviceConfigSchema } from "@/features/settings/schemas/device-config.schema"
 import { prisma } from "@/shared/lib/prisma"
 import { networkService } from "@/shared/lib/network-service"

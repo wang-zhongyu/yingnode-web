@@ -15,7 +15,7 @@ import type { ManualAddInput } from "../schemas/network.schema"
 import { useAction } from "next-safe-action/hooks"
 import { connectFromHotspotAction } from "@/actions/network.actions"
 import { toast } from "sonner"
-import { AlertTriangle, ExternalLink } from "lucide-react"
+import { AlertTriangle } from "lucide-react"
 
 export function ConnectFromHotspotDialog() {
   const { type, isOpen, close } = useModalStore()

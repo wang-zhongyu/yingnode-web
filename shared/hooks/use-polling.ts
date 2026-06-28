@@ -9,7 +9,12 @@ interface UsePollingResult<T> {
 }
 
 /** Generic polling hook — single shared primitive for all client-side data fetching.
- *  Set intervalMs to 0 for a one-time fetch (no polling). */
+ *  Set intervalMs to 0 for a one-time fetch (no polling).
+ *
+ *  ponytail: useEffect is used here because this implements a subscription-style
+ *  polling pattern — synchronizing with an external fetch stream over time.
+ *  This is the canonical use case for useEffect (external system sync), not a
+ *  one-time data fetch that should live in a Server Component. */
 export function usePolling<T>(
   url: string,
   intervalMs: number,

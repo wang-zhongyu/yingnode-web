@@ -4,14 +4,12 @@ import type { NetworkStatusType } from "@/shared/types/network"
 interface CurrentStatusProps {
   status: NetworkStatusType
   currentSSID: string | null
-  hotspotActive: boolean
   reachableIp: string | null
 }
 
 export function CurrentStatus({
   status,
   currentSSID,
-  hotspotActive,
   reachableIp,
 }: CurrentStatusProps) {
   const appUrl = reachableIp ? `http://${reachableIp}:3000` : null

@@ -14,6 +14,10 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 
 export function LoginForm() {
+  // ponytail: manual isPending — better-auth's signIn.email() is the official
+  // client SDK method (not a custom Server Action), so next-safe-action's
+  // useAction() does not apply here. Manual state management is the correct
+  // pattern per better-auth API.
   const [isPending, setIsPending] = useState(false)
   const router = useRouter()
 

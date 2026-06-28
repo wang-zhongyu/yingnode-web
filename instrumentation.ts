@@ -1,5 +1,3 @@
-import type { NetworkService } from "@/shared/lib/network-service"
-
 let monitorStarted = false
 
 export async function register() {

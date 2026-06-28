@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import {
   Sheet,
   SheetContent,
@@ -10,18 +9,12 @@ import {
 } from "@/components/ui/sheet"
 import { Separator } from "@/components/ui/separator"
 import { useModalStore } from "@/shared/stores/use-modal-store"
+import { usePolling } from "@/shared/hooks/use-polling"
 import type { NetworkStatus } from "@/shared/types/network"
 
 export function NetworkSettingsSheet() {
   const { type, isOpen, close } = useModalStore()
-  const [status, setStatus] = useState<NetworkStatus | null>(null)
-
-  useEffect(() => {
-    if (!isOpen || type !== "networkSettings") return
-    fetch("/api/network/status")
-      .then((r) => r.json())
-      .then(setStatus)
-  }, [isOpen, type])
+  const { data: status } = usePolling<NetworkStatus>("/api/network/status", 0)
 
   if (type !== "networkSettings") return null
 

@@ -10,8 +10,6 @@ let mockAssociated = false
 let mockPingOk = false
 let hotspotStartCallCount = 0
 let hotspotStopCallCount = 0
-let manualLock = false
-
 // ---- Simulated networkService ----
 const networkService = {
   async getStatus() {
