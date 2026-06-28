@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 export const actionClient = createSafeActionClient({
   // ponytail: expose server error messages to the client — the device is
   // accessed locally over LAN, no risk of leaking sensitive internals
-  handleReturnedServerError(e: Error) {
+  handleServerError(e: Error) {
     return e.message
   },
 })
