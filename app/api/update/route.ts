@@ -74,7 +74,7 @@ export async function POST() {
           { key: "install", label: "安装依赖", cmd: "npm ci --omit=dev" },
           { key: "prisma", label: "生成 Prisma Client", cmd: "npx prisma generate --no-engine" },
           { key: "build", label: "构建应用", cmd: "npm run build" },
-          { key: "db", label: "同步数据库", cmd: "npx prisma db push --accept-data-loss" },
+          { key: "db", label: "同步数据库", cmd: "npx prisma db push" },
           { key: "restart", label: "重启服务", cmd: SERVICE_RESTART },
         ]
 

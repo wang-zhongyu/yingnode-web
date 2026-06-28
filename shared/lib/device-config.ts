@@ -1,10 +1,11 @@
 import { prisma } from "@/shared/lib/prisma"
 
 const FALLBACK = {
-  wifiInterface: process.env.WIFI_INTERFACE ?? "wlan0",
-  hotspotIp: process.env.HOTSPOT_IP ?? "172.16.42.1",
-  hotspotSsid: process.env.HOTSPOT_SSID ?? "yingnode",
-  hotspotPassword: process.env.HOTSPOT_PASSWORD ?? "",
+  // ponytail: || over ?? — empty string env means "not set"
+  wifiInterface: process.env.WIFI_INTERFACE || "wlan0",
+  hotspotIp: process.env.HOTSPOT_IP || "172.16.42.1",
+  hotspotSsid: process.env.HOTSPOT_SSID || "yingnode",
+  hotspotPassword: process.env.HOTSPOT_PASSWORD || "",
 }
 
 export async function getDeviceConfig() {

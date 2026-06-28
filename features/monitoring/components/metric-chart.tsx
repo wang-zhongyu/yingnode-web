@@ -1,6 +1,7 @@
 // features/monitoring/components/metric-chart.tsx
 "use client"
 
+import { useId } from "react"
 import { Card, CardHeader, CardContent } from "@/components/ui/card"
 import {
   ResponsiveContainer,
@@ -37,6 +38,7 @@ export function MetricChart({
   color,
   isLoading,
 }: MetricChartProps) {
+  const gradientId = useId()
   if (isLoading) return <MetricChartSkeleton />
 
   if (data.length === 0) {
@@ -63,7 +65,7 @@ export function MetricChart({
         <ResponsiveContainer width="100%" height={200}>
           <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <defs>
-              <linearGradient id={`fill-${label}`} x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={color} stopOpacity={0.3} />
                 <stop offset="95%" stopColor={color} stopOpacity={0} />
               </linearGradient>
@@ -84,7 +86,7 @@ export function MetricChart({
               type="monotone"
               dataKey="value"
               stroke={color}
-              fill={`url(#fill-${label})`}
+              fill={`url(#${gradientId})`}
               strokeWidth={2}
             />
           </AreaChart>

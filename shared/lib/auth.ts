@@ -26,7 +26,7 @@ export const auth = betterAuth({
   },
   // The device serves over HTTP on a local network — secure cookies would be
   // rejected by browsers and break authentication entirely.
-  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
   advanced: {
     useSecureCookies: false,
     crossSubDomainCookies: { enabled: false },

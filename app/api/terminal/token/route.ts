@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 
 const TTYD_PORT = 3001
-const TTYD_AUTH = `yingnode:${process.env.TERMINAL_TOKEN ?? "yingnode-terminal"}`
+
+// ponytail: require explicit env — no hardcoded fallback that leaks credentials
+function getTtydAuth(): string {
+  const token = process.env.TERMINAL_TOKEN
+  if (!token) {
+    throw new Error("TERMINAL_TOKEN environment variable is required")
+  }
+  return `yingnode:${token}`
+}
 
 // In-memory token store with TTL
 const tokenStore = new Map<string, { auth: string; expiresAt: number }>()
@@ -19,10 +27,18 @@ setInterval(() => {
  *  The credential is NEVER returned in this response. */
 export async function GET() {
   const token = crypto.randomUUID()
-  tokenStore.set(token, {
-    auth: TTYD_AUTH,
-    expiresAt: Date.now() + TOKEN_TTL_MS,
-  })
+
+  let auth: string
+  try {
+    auth = getTtydAuth()
+  } catch (err) {
+    return NextResponse.json(
+      { error: "Terminal not configured" },
+      { status: 500 },
+    )
+  }
+
+  tokenStore.set(token, { auth, expiresAt: Date.now() + TOKEN_TTL_MS })
 
   return NextResponse.json({
     url: `http://localhost:${TTYD_PORT}`,

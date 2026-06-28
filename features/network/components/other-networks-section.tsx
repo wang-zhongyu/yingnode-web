@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { ChevronRight } from "lucide-react"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import type { WiFiNetwork } from "@/shared/types/network"
 import { WiFiListItem } from "./wifi-list-item"
 

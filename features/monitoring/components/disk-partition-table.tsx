@@ -40,8 +40,8 @@ export function DiskPartitionTable() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {partitions.map((p, i) => (
-            <TableRow key={i}>
+          {partitions.map((p) => (
+            <TableRow key={`${p.filesystem}-${p.mountedOn}`}>
               <TableCell className="max-w-[150px] truncate font-medium" title={p.filesystem}>{p.filesystem}</TableCell>
               <TableCell>{p.size}</TableCell>
               <TableCell>{p.used}</TableCell>

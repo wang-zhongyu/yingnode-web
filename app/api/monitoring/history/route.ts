@@ -5,7 +5,7 @@ import { historyQuerySchema } from "@/features/monitoring/schemas/monitoring.sch
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
+    const { searchParams } = request.nextUrl
     const { minutes } = historyQuerySchema.parse({
       minutes: searchParams.get("minutes"),
     })

@@ -1,14 +1,34 @@
 "use server"
 
-import { actionClient } from "@/shared/lib/safe-action"
+import { actionClient, authActionClient } from "@/shared/lib/safe-action"
 import { setupSchema, changePasswordSchema } from "@/features/auth/schemas/auth.schema"
 import { checkUsersExist } from "@/features/auth/lib/check-users-exist"
 import { auth } from "@/shared/lib/auth"
 import { headers } from "next/headers"
 
+// ponytail: simple in-memory rate limiter — 5 setup attempts per minute
+let setupAttempts = 0
+let setupWindowStart = 0
+const SETUP_RATE_LIMIT = 5
+const SETUP_WINDOW_MS = 60_000
+
+function checkSetupRateLimit(): void {
+  const now = Date.now()
+  if (now - setupWindowStart > SETUP_WINDOW_MS) {
+    setupAttempts = 0
+    setupWindowStart = now
+  }
+  setupAttempts++
+  if (setupAttempts > SETUP_RATE_LIMIT) {
+    throw new Error("请求过于频繁，请稍后再试")
+  }
+}
+
 export const setupAdminAction = actionClient
   .schema(setupSchema)
   .action(async ({ parsedInput: { email, password } }) => {
+    checkSetupRateLimit()
+
     const usersExist = await checkUsersExist()
 
     if (usersExist) {
@@ -33,7 +53,7 @@ export const setupAdminAction = actionClient
     return result
   })
 
-export const changePasswordAction = actionClient
+export const changePasswordAction = authActionClient
   .schema(changePasswordSchema)
   .action(async ({ parsedInput: { currentPassword, newPassword } }) => {
     const result = await auth.api.changePassword({

@@ -2,6 +2,8 @@ import { create } from "zustand"
 
 export type ModalType = "manualAddNetwork" | "networkSettings" | "terminal" | "connectFromHotspot"
 
+// ponytail: simple bag — ssid is used by manualAddNetwork + connectFromHotspot,
+// the others pass empty objects. No need for a fancier discriminated union.
 export interface ModalData {
   ssid?: string
 }

@@ -27,7 +27,7 @@ export function SidebarNavMain() {
           {navItems.map((item) => (
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
-                isActive={pathname.startsWith(item.href)}
+                isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
                 render={(props) => (
                   <Link href={item.href} {...props}>
                     <item.icon />

@@ -1,14 +1,7 @@
 import "server-only"
-import { exec } from "node:child_process"
-import { promisify } from "node:util"
 import { readFile } from "node:fs/promises"
 import type { SystemMetrics } from "@/shared/types/monitoring"
-
-const execAsyncBase = promisify(exec)
-
-function execAsync(command: string, timeoutMs = 8000) {
-  return execAsyncBase(command, { timeout: timeoutMs })
-}
+import { execAsync } from "@/shared/lib/shell"
 
 class SystemMonitor {
   private prevIdle = 0

@@ -42,9 +42,14 @@ function execCommand(command: string, timeoutMs = INSTALL_TIMEOUT): Promise<{ ok
 class AppStore {
   private getDefinitions(): AppDefinition[] {
     if (!existsSync(CONFIG_PATH)) return []
-    const raw = readFileSync(CONFIG_PATH, "utf-8")
-    const config = JSON.parse(raw)
-    return (config.apps ?? []) as AppDefinition[]
+    try {
+      const raw = readFileSync(CONFIG_PATH, "utf-8")
+      const config = JSON.parse(raw)
+      return (config.apps ?? []) as AppDefinition[]
+    } catch (err) {
+      console.error("[app-store] Failed to parse apps.json:", err)
+      return []
+    }
   }
 
   async getApps(): Promise<AppWithStatus[]> {

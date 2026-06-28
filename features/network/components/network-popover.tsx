@@ -4,10 +4,12 @@ import { useState, useEffect } from "react"
 import { PopoverContent } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
+import { useAction } from "next-safe-action/hooks"
 import { SpinnerEmpty } from "@/shared/components/spinner-empty"
 import { ListEmpty } from "@/shared/components/list-empty"
 import type { NetworkStatus, WiFiNetwork } from "@/shared/types/network"
 import { useModalStore } from "@/shared/stores/use-modal-store"
+import { connectWiFiAction } from "@/actions/network.actions"
 import { CurrentStatus } from "./current-status"
 import { WiFiList } from "./wifi-list"
 import { ManualAddItem } from "./manual-add-item"
@@ -20,6 +22,14 @@ export function NetworkPopover() {
   const [scanning, setScanning] = useState(false)
   const [statusError, setStatusError] = useState(false)
   const openModal = useModalStore((s) => s.open)
+  const { execute } = useAction(connectWiFiAction, {
+    onSuccess() {
+      fetchStatus()
+    },
+    onError({ error }) {
+      toast.error(error.serverError ?? "连接失败")
+    },
+  })
 
   useEffect(() => {
     async function load() {
@@ -49,12 +59,11 @@ export function NetworkPopover() {
       const res = await fetch("/api/network/scan")
       if (!res.ok) throw new Error("扫描失败")
       const data = await res.json()
-      const networks: WiFiNetwork[] = data.networks
-      if (currentSSID) {
-        for (const n of networks) {
-          if (n.ssid === currentSSID) n.connected = true
-        }
-      }
+      const networks: WiFiNetwork[] = currentSSID
+        ? data.networks.map((n: WiFiNetwork) =>
+            n.ssid === currentSSID ? { ...n, connected: true } : n,
+          )
+        : data.networks
       setNetworks(networks)
     } catch {
       toast.error("无法扫描网络，请检查无线网卡")
@@ -65,18 +74,9 @@ export function NetworkPopover() {
 
   async function handleConnect(ssid: string, hasPassword: boolean) {
     if (!hasPassword) {
-      const res = await fetch("/api/network/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ssid }),
-      })
-      const data = await res.json()
-      if (!data.success) {
-        toast.error(data.error ?? "连接失败")
-        return
-      }
-      toast.success(`已连接到 "${ssid}"`)
-      fetchStatus()
+      // ponytail: route OPEN networks through connectWiFiAction so hotspot
+      // stop / NM remanage / interface-ready logic runs before wpa_cli commands
+      execute({ ssid, password: "", security: "OPEN" })
       return
     }
 

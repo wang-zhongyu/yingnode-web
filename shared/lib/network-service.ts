@@ -6,12 +6,16 @@ import type { NetworkStatus, WiFiNetwork, ConnectResult } from "@/shared/types/n
 // Connectivity check targets — use DNS servers reachable from both China and global networks
 const PING_TARGETS = ["223.5.5.5", "114.114.114.114", "8.8.8.8"]
 
+/** Escape a string for safe use in a RegExp literal. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
 export class NetworkService {
   private staticIpEnsured = false
   private configCache: Awaited<ReturnType<typeof getDeviceConfig>> | null = null
   private configCacheTime: number = 0
   private static readonly CONFIG_CACHE_TTL_MS = 30_000 // 30 seconds
-  private nmManagedIface: string | null = null
 
   /** Read device config from DB, with env-var fallback. Cached after first read. */
   async getConfig() {
@@ -134,21 +138,6 @@ export class NetworkService {
     } catch { /* NetworkManager not running — ok */ }
   }
 
-  /** Register process exit handlers to restore NM management on crash/stop. */
-  private registerNMRecovery(iface: string): void {
-    if (this.nmManagedIface) return // already registered
-    this.nmManagedIface = iface
-
-    const restore = () =>
-      this.toggleNM(true, iface).catch(() => {})
-
-    for (const signal of ["SIGTERM", "SIGINT"] as const) {
-      process.once(signal, () => {
-        restore().finally(() => process.exit(0))
-      })
-    }
-  }
-
   /** Ensure the fixed IP is always bound to the interface as secondary.
    *  This means the device is always reachable at 172.16.42.1 whether
    *  in hotspot mode or connected to an external WiFi network. */
@@ -161,9 +150,7 @@ export class NetworkService {
     try {
       // Check if IP already exists on interface (exact match via word boundary)
       const { stdout } = await execAsync(`ip -4 addr show dev ${safeArg(wifiInterface)}`)
-      const ipRegex = new RegExp(
-        `\\b${hotspotIp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
-      )
+      const ipRegex = new RegExp(`\\b${escapeRegex(hotspotIp)}\\b`)
       if (!ipRegex.test(stdout)) {
         await execAsync(`sudo ip addr add ${safeArg(hotspotIp)}/24 dev ${safeArg(wifiInterface)}`)
       }
@@ -355,8 +342,7 @@ export class NetworkService {
       const { stdout: ipOut } = await execAsync(
         `ip -4 addr show dev ${safeArg(wifiInterface)}`,
       )
-      const escapedIp = hotspotIp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      if (!new RegExp(`\\b${escapedIp}\\b`).test(ipOut)) {
+      if (!new RegExp(`\\b${escapeRegex(hotspotIp)}\\b`).test(ipOut)) {
         await execAsync(`sudo ip addr add ${safeArg(hotspotIp)}/24 dev ${safeArg(wifiInterface)}`)
       }
     } catch {
@@ -746,7 +732,11 @@ export class NetworkService {
 
   async connectWiFi(ssid: string, password?: string, security?: string): Promise<ConnectResult> {
     const { wifiInterface } = await this.getConfig()
+    // ponytail: escapeShellArg handles single quotes for shell; extra replaces
+    // handle chars that wpa_cli's string parser treats specially inside "..."
     const escapedSSID = escapeShellArg(ssid)
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
 
     try {
       // First try wpa_cli (works when NM manages the interface on Kali)

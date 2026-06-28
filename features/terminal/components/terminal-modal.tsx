@@ -17,17 +17,13 @@ export function TerminalModal() {
   useEffect(() => {
     if (!isOpen || type !== "terminal") return
     const controller = new AbortController()
-    let cancelled = false
 
     async function fetchUrl() {
-      if (cancelled) return
       setUrl("")
       setError(false)
       try {
         const tokenRes = await fetch("/api/terminal/token", { signal: controller.signal })
         const { url: baseUrl, token } = await tokenRes.json()
-
-        if (cancelled) return
 
         const authRes = await fetch("/api/terminal/token", {
           method: "POST",
@@ -35,8 +31,6 @@ export function TerminalModal() {
           body: JSON.stringify({ token }),
           signal: controller.signal,
         })
-
-        if (cancelled) return
 
         if (!authRes.ok) {
           setUrl("")
@@ -46,25 +40,21 @@ export function TerminalModal() {
 
         const { auth } = await authRes.json()
 
-        if (cancelled) return
-
         if (!auth) {
           setUrl("")
           setError(true)
           return
         }
         const authUrl = baseUrl.replace("://", `://${auth}@`)
-        if (!cancelled) setUrl(authUrl)
+        setUrl(authUrl)
       } catch (err) {
-        if ((err as Error).name === "AbortError") return
-        if (!cancelled) { setUrl(""); setError(true) }
+        if (err instanceof DOMException && err.name === "AbortError") return
+        setUrl("")
+        setError(true)
       }
     }
     fetchUrl()
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
+    return () => controller.abort()
   }, [isOpen, type])
 
   if (type !== "terminal") return null
@@ -86,7 +76,7 @@ export function TerminalModal() {
 
 function TerminalBody({ url, error }: { url: string; error: boolean }) {
   if (url) {
-    return <iframe src={url} className="flex-1 border-0" title="终端" />
+    return <iframe src={url} className="flex-1 border-0" title="终端" sandbox="allow-same-origin allow-scripts" />
   }
 
   if (error) {

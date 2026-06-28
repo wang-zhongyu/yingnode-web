@@ -17,9 +17,14 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL("/monitoring", request.url))
     }
 
-    const usersExist = await checkUsersExist()
-    if (!usersExist) {
-      return NextResponse.redirect(new URL("/setup", request.url))
+    try {
+      const usersExist = await checkUsersExist()
+      if (!usersExist) {
+        return NextResponse.redirect(new URL("/setup", request.url))
+      }
+    } catch {
+      // DB unavailable — allow access rather than block completely
+      console.error("[proxy] Failed to check users exist")
     }
     return NextResponse.redirect(new URL("/login", request.url))
   }
@@ -30,9 +35,13 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL("/monitoring", request.url))
     }
 
-    const usersExist = await checkUsersExist()
-    if (usersExist) {
-      return NextResponse.redirect(new URL("/login", request.url))
+    try {
+      const usersExist = await checkUsersExist()
+      if (usersExist) {
+        return NextResponse.redirect(new URL("/login", request.url))
+      }
+    } catch {
+      console.error("[proxy] Failed to check users exist for /setup")
     }
 
     return NextResponse.next()
@@ -49,13 +58,19 @@ export async function proxy(request: NextRequest) {
   // Protected routes: /(dashboard) and /(settings)
   const isProtectedRoute =
     pathname.startsWith("/monitoring") ||
+    pathname.startsWith("/apps") ||
+    pathname.startsWith("/docker") ||
     pathname.startsWith("/settings")
 
   if (isProtectedRoute) {
     if (!isAuthenticated) {
-      const usersExist = await checkUsersExist()
-      if (!usersExist) {
-        return NextResponse.redirect(new URL("/setup", request.url))
+      try {
+        const usersExist = await checkUsersExist()
+        if (!usersExist) {
+          return NextResponse.redirect(new URL("/setup", request.url))
+        }
+      } catch {
+        console.error("[proxy] Failed to check users exist for protected route")
       }
       return NextResponse.redirect(new URL("/login", request.url))
     }

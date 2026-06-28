@@ -1,14 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { SpinnerEmpty } from "@/shared/components/spinner-empty"
 import { ListEmpty } from "@/shared/components/list-empty"
 import type { AppWithStatus } from "@/shared/types/app"
 import { AppCard } from "./app-card"
 
-export function AppGrid() {
-  const [apps, setApps] = useState<AppWithStatus[]>([])
-  const [loading, setLoading] = useState(true)
+export function AppGrid({ initialApps }: { initialApps: AppWithStatus[] }) {
+  const [apps, setApps] = useState<AppWithStatus[]>(initialApps)
+  const [loading, setLoading] = useState(false)
 
   async function fetchApps() {
     setLoading(true)
@@ -23,12 +23,8 @@ export function AppGrid() {
     }
   }
 
-  useEffect(() => {
-    fetchApps()
-  }, [])
-
-  if (loading) return <SpinnerEmpty message="加载应用列表..." />
-  if (apps.length === 0) return <ListEmpty message="没有可安装的应用" />
+  if (loading && apps.length === 0) return <SpinnerEmpty message="加载应用列表..." />
+  if (!loading && apps.length === 0) return <ListEmpty message="没有可安装的应用" />
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

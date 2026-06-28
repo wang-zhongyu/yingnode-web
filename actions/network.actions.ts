@@ -1,7 +1,7 @@
 "use server"
 
 import { actionClient } from "@/shared/lib/safe-action"
-import { manualAddSchema, connectFromHotspotSchema } from "@/features/network/schemas/network.schema"
+import { manualAddSchema } from "@/features/network/schemas/network.schema"
 import { networkService } from "@/shared/lib/network-service"
 import { setManualHotspotLock } from "@/shared/lib/hotspot-lock"
 
@@ -49,7 +49,7 @@ export const connectWiFiAction = actionClient
   })
 
 export const connectFromHotspotAction = actionClient
-  .schema(connectFromHotspotSchema)
+  .schema(manualAddSchema)
   .action(async ({ parsedInput: { ssid, password, security } }) => {
     setManualHotspotLock(true)
     try {

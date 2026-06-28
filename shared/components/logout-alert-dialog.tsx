@@ -16,6 +16,7 @@ export function LogoutAlertDialog({ open, onOpenChange }: LogoutAlertDialogProps
   const router = useRouter()
 
   async function handleLogout() {
+    if (isPending) return // ponytail: prevent double-click double-logout
     setIsPending(true)
     try {
       await signOut()

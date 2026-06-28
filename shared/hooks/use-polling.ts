@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 
 interface UsePollingResult<T> {
   data: T | null
@@ -8,6 +8,8 @@ interface UsePollingResult<T> {
   isLoading: boolean
 }
 
+/** Generic polling hook — single shared primitive for all client-side data fetching.
+ *  Set intervalMs to 0 for a one-time fetch (no polling). */
 export function usePolling<T>(
   url: string,
   intervalMs: number,
@@ -15,26 +17,15 @@ export function usePolling<T>(
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState(false)
 
-  const fetchData = useCallback(async () => {
-    try {
-      const res = await fetch(url)
-      if (!res.ok) throw new Error("Failed")
-      const json = (await res.json()) as T
-      setData(json)
-      setError(false)
-    } catch {
-      setError(true)
-    }
-  }, [url])
-
   useEffect(() => {
     let cancelled = false
+
     async function poll() {
       try {
         const res = await fetch(url)
-        if (!res.ok) throw new Error("Failed")
-        const json = (await res.json()) as T
         if (!cancelled) {
+          if (!res.ok) throw new Error("Failed")
+          const json = (await res.json()) as T
           setData(json)
           setError(false)
         }
@@ -42,7 +33,11 @@ export function usePolling<T>(
         if (!cancelled) setError(true)
       }
     }
+
     poll()
+
+    if (intervalMs <= 0) return
+
     const interval = setInterval(poll, intervalMs)
     return () => {
       cancelled = true

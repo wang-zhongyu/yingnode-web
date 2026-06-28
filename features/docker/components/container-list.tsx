@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -10,10 +10,23 @@ import type { DockerContainer, ContainerAction } from "@/shared/types/docker"
 import { ContainerLogsSheet } from "./container-logs-sheet"
 import { PlayIcon, SquareIcon, RotateCwIcon, FileTextIcon } from "lucide-react"
 
-export function ContainerList() {
-  const [containers, setContainers] = useState<DockerContainer[]>([])
-  const [loading, setLoading] = useState(true)
-  const [dockerAvailable, setDockerAvailable] = useState(true)
+const STATE_LABELS: Record<string, string> = {
+  running: "运行中",
+  stopped: "已停止",
+  paused: "已暂停",
+  restarting: "重启中",
+}
+
+export function ContainerList({
+  initialContainers,
+  initialDockerAvailable,
+}: {
+  initialContainers: DockerContainer[]
+  initialDockerAvailable: boolean
+}) {
+  const [containers, setContainers] = useState<DockerContainer[]>(initialContainers)
+  const [loading, setLoading] = useState(false)
+  const [dockerAvailable, setDockerAvailable] = useState(initialDockerAvailable)
   const [logsId, setLogsId] = useState<string | null>(null)
 
   async function fetchContainers() {
@@ -40,18 +53,15 @@ export function ContainerList() {
         body: JSON.stringify({ action }),
       })
       if (!res.ok) throw new Error("Failed")
-      toast.success(`容器已${action === "start" ? "启动" : action === "stop" ? "停止" : "重启"}`)
+      const labels: Record<ContainerAction, string> = { start: "启动", stop: "停止", restart: "重启" }
+      toast.success(`容器已${labels[action]}`)
       fetchContainers()
     } catch {
       toast.error(`操作失败`)
     }
   }
 
-  useEffect(() => {
-    fetchContainers()
-  }, [])
-
-  if (loading) return <SpinnerEmpty message="加载容器列表..." />
+  if (loading && containers.length === 0) return <SpinnerEmpty message="加载容器列表..." />
 
   if (!dockerAvailable) {
     return <ListEmpty message="Docker 不可用，请确保 Docker 已安装并启动" />
@@ -82,7 +92,7 @@ export function ContainerList() {
                     <Badge
                       variant={c.state === "running" ? "default" : "secondary"}
                     >
-                      {c.state === "running" ? "运行中" : "已停止"}
+                      {STATE_LABELS[c.state] ?? c.state}
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground font-mono text-xs">

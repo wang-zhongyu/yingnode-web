@@ -1,7 +1,7 @@
 // features/monitoring/hooks/use-metrics-history.ts
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { usePolling } from "@/shared/hooks/use-polling"
 
 export interface MetricsRecord {
   timestamp: string
@@ -16,32 +16,16 @@ export interface MetricsRecord {
 interface UseMetricsHistoryResult {
   records: MetricsRecord[]
   isLoading: boolean
+  error: boolean
 }
 
 export function useMetricsHistory(
   minutes: number = 60,
 ): UseMetricsHistoryResult {
-  const [records, setRecords] = useState<MetricsRecord[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const { data, error, isLoading } = usePolling<{ records: MetricsRecord[] }>(
+    `/api/monitoring/history?minutes=${minutes}`,
+    30_000,
+  )
 
-  const fetchHistory = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/monitoring/history?minutes=${minutes}`)
-      if (!res.ok) throw new Error("Failed to fetch history")
-      const data = await res.json()
-      setRecords(data.records)
-    } catch {
-      setRecords([])
-    } finally {
-      setIsLoading(false)
-    }
-  }, [minutes])
-
-  useEffect(() => {
-    fetchHistory()
-    const interval = setInterval(fetchHistory, 30_000)
-    return () => clearInterval(interval)
-  }, [fetchHistory])
-
-  return { records, isLoading }
+  return { records: data?.records ?? [], error, isLoading }
 }
