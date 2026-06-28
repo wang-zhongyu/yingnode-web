@@ -145,9 +145,9 @@ function startNetworkMonitor(
         onlineTicks = 0
         offlineTicks++
 
-        // On first offline tick, unmanage NM to prevent it from
-        // auto-reconnecting while we count offlineTicks toward hotspot.
-        if (offlineTicks === 1) {
+        // After 2 offline ticks (20s), unmanage NM to prevent it from
+        // auto-reconnecting while we count toward hotspot start.
+        if (offlineTicks === 2) {
           networkService.unmanageNM().catch(() => {})
         }
 
